@@ -213,7 +213,9 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_USERNAME): str,
                     vol.Required(CONF_PASSWORD): str,
                     vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
-                    vol.Required(CONF_API_VERSION, default=default_api_version): selector.SelectSelector(
+                    vol.Required(
+                        CONF_API_VERSION, default=default_api_version
+                    ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=api_version_options,
                             mode=selector.SelectSelectorMode.DROPDOWN,

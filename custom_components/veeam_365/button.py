@@ -45,7 +45,9 @@ class Veeam365ButtonBase(CoordinatorEntity, ButtonEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, veeam_client, device_id: str, device_name: str, device_model: str):
+    def __init__(
+        self, coordinator, veeam_client, device_id: str, device_name: str, device_model: str
+    ):
         """Initialize the button."""
         super().__init__(coordinator)
         self._veeam_client = veeam_client
