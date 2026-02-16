@@ -30,7 +30,7 @@
         },
         "data_description": {
           "username": "Administrator username",
-          "password": "User password",
+          "password": "User password"
         }
       },
       "reconfigure": {
