@@ -9,7 +9,8 @@
           "port": "Port",
           "username": "Uživatelské jméno",
           "password": "Heslo",
-          "verify_ssl": "Ověřit certifikát SSL"
+          "verify_ssl": "Ověřit certifikát SSL",
+          "api_version": "Verze API"
         }
       },
       "reauth_confirm": {
@@ -28,7 +29,8 @@
           "port": "Port",
           "username": "Uživatelské jméno",
           "password": "Heslo",
-          "verify_ssl": "Ověřit certifikát SSL"
+          "verify_ssl": "Ověřit certifikát SSL",
+          "api_version": "Verze API"
         }
       }
     },

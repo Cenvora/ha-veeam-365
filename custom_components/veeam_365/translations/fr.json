@@ -9,7 +9,8 @@
           "port": "Port",
           "username": "Nom d'utilisateur",
           "password": "Mot de passe",
-          "verify_ssl": "Vérifier le certificat SSL"
+          "verify_ssl": "Vérifier le certificat SSL",
+          "api_version": "Version de l'API"
         }
       },
       "reauth_confirm": {
@@ -28,7 +29,8 @@
           "port": "Port",
           "username": "Nom d'utilisateur",
           "password": "Mot de passe",
-          "verify_ssl": "Vérifier le certificat SSL"
+          "verify_ssl": "Vérifier le certificat SSL",
+          "api_version": "Version de l'API"
         }
       }
     },

@@ -9,7 +9,8 @@
           "port": "端口",
           "username": "用户名",
           "password": "密码",
-          "verify_ssl": "验证 SSL 证书"
+          "verify_ssl": "验证 SSL 证书",
+          "api_version": "API 版本"
         }
       },
       "reauth_confirm": {
@@ -28,7 +29,8 @@
           "port": "端口",
           "username": "用户名",
           "password": "密码",
-          "verify_ssl": "验证 SSL 证书"
+          "verify_ssl": "验证 SSL 证书",
+          "api_version": "API 版本"
         }
       }
     },

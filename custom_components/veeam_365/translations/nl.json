@@ -9,7 +9,8 @@
           "port": "Poort",
           "username": "Gebruikersnaam",
           "password": "Wachtwoord",
-          "verify_ssl": "SSL-certificaat verifiëren"
+          "verify_ssl": "SSL-certificaat verifiëren",
+          "api_version": "API-versie"
         }
       },
       "reauth_confirm": {
@@ -28,7 +29,8 @@
           "port": "Poort",
           "username": "Gebruikersnaam",
           "password": "Wachtwoord",
-          "verify_ssl": "SSL-certificaat verifiëren"
+          "verify_ssl": "SSL-certificaat verifiëren",
+          "api_version": "API-versie"
         }
       }
     },

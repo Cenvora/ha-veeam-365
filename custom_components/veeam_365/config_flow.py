@@ -13,7 +13,10 @@ from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from .const import (
+    API_VERSIONS,
+    CONF_API_VERSION,
     CONF_VERIFY_SSL,
+    DEFAULT_API_VERSION,
     DEFAULT_PORT,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
@@ -46,7 +49,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 username=data[CONF_USERNAME],
                 password=data[CONF_PASSWORD],
                 verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                api_version="v8",
+                api_version=data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
             )
             await client.connect()
             await client.close()
@@ -105,6 +108,9 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_USERNAME): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
                 vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
+                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): vol.In(
+                    list(API_VERSIONS.keys())
+                ),
             }
         )
 
@@ -182,6 +188,10 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_VERIFY_SSL,
                     default=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
                 ): cv.boolean,
+                vol.Optional(
+                    CONF_API_VERSION,
+                    default=entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
+                ): vol.In(list(API_VERSIONS.keys())),
             }
         )
 

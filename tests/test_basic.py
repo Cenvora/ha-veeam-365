@@ -153,10 +153,20 @@ def test_default_port():
 
 
 def test_api_version():
-    """Test that integration uses v8 API version."""
+    """Test that integration uses configurable API version with v8 default."""
     from pathlib import Path
 
-    # Check config_flow
+    # Check const.py has DEFAULT_API_VERSION
+    const_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "const.py"
+
+    with open(const_path) as f:
+        const_content = f.read()
+
+    assert 'DEFAULT_API_VERSION = "v8"' in const_content
+    assert "CONF_API_VERSION" in const_content
+    assert "API_VERSIONS" in const_content
+
+    # Check config_flow uses configurable API version
     config_flow_path = (
         Path(__file__).parent.parent / "custom_components" / "veeam_365" / "config_flow.py"
     )
@@ -164,15 +174,20 @@ def test_api_version():
     with open(config_flow_path) as f:
         config_flow_content = f.read()
 
-    assert 'api_version="v8"' in config_flow_content
+    assert "CONF_API_VERSION" in config_flow_content
+    assert "DEFAULT_API_VERSION" in config_flow_content
+    assert "API_VERSIONS" in config_flow_content
+    assert "data.get(CONF_API_VERSION, DEFAULT_API_VERSION)" in config_flow_content
 
-    # Check __init__
+    # Check __init__ uses configurable API version
     init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
 
     with open(init_path) as f:
         init_content = f.read()
 
-    assert 'api_version="v8"' in init_content
+    assert "CONF_API_VERSION" in init_content
+    assert "DEFAULT_API_VERSION" in init_content
+    assert "entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION)" in init_content
 
 
 def test_translation_files_exist():
