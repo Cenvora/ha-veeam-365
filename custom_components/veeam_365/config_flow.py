@@ -10,6 +10,11 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNA
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 import voluptuous as vol
 
 from .const import (
@@ -108,8 +113,11 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_USERNAME): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
                 vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
-                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): vol.In(
-                    list(API_VERSIONS.keys())
+                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(API_VERSIONS.keys()),
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
                 ),
             }
         )
@@ -191,7 +199,12 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_API_VERSION,
                     default=entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-                ): vol.In(list(API_VERSIONS.keys())),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(API_VERSIONS.keys()),
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 
