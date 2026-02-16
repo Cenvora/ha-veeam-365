@@ -82,7 +82,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Get backup jobs
             try:
+                _LOGGER.debug("Fetching backup jobs from API")
                 jobs_response = await veeam_client.call(veeam_client.api("job").job_get)
+                _LOGGER.debug("Jobs response received: %s", type(jobs_response))
                 if jobs_response and hasattr(jobs_response, "results"):
                     for job in jobs_response.results:
                         # Convert last_status enum to lowercase string
@@ -116,11 +118,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             }
                         )
             except Exception as err:
-                _LOGGER.warning("Failed to fetch jobs: %s", err)
+                _LOGGER.error(
+                    "Failed to fetch jobs: %s - %s", type(err).__name__, err, exc_info=True
+                )
 
             # Get license information
             try:
+                _LOGGER.debug("Fetching license information from API")
                 license_response = await veeam_client.call(veeam_client.api("license").license_get)
+                _LOGGER.debug("License response received: %s", type(license_response))
                 if license_response:
                     data["license"] = {
                         "license_id": (
@@ -165,13 +171,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         ),
                     }
             except Exception as err:
-                _LOGGER.warning("Failed to fetch license: %s", err)
+                _LOGGER.error(
+                    "Failed to fetch license: %s - %s", type(err).__name__, err, exc_info=True
+                )
 
             # Get server information
             try:
+                _LOGGER.debug("Fetching server information from API")
                 server_response = await veeam_client.call(
                     veeam_client.api("service").service_get_version
                 )
+                _LOGGER.debug("Server response received: %s", type(server_response))
                 if server_response:
                     data["server"] = {
                         "version": (
@@ -186,7 +196,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         ),
                     }
             except Exception as err:
-                _LOGGER.warning("Failed to fetch server info: %s", err)
+                _LOGGER.error(
+                    "Failed to fetch server info: %s - %s", type(err).__name__, err, exc_info=True
+                )
 
             return data
 
