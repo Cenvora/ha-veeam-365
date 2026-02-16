@@ -74,12 +74,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             await hass.async_add_executor_job(_connect_sync)
 
-            # Fetch all data: jobs, license, and server info
-            data = {
-                "jobs": [],
-                "license": None,
-                "server": None,
-            }
+            # Fetch backup jobs
+            jobs = []
 
             # Get backup jobs
             try:
@@ -93,7 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         if hasattr(job, "last_status") and job.last_status:
                             status = str(job.last_status).lower()
 
-                        data["jobs"].append(
+                        jobs.append(
                             {
                                 "id": str(job.id) if job.id else None,
                                 "name": job.name if hasattr(job, "name") else "Unknown",
@@ -123,85 +119,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "Failed to fetch jobs: %s - %s", type(err).__name__, err, exc_info=True
                 )
 
-            # Get license information
-            try:
-                _LOGGER.debug("Fetching license information from API")
-                license_response = await veeam_client.call(veeam_client.api("license").license_get)
-                _LOGGER.debug("License response received: %s", type(license_response))
-                if license_response:
-                    data["license"] = {
-                        "license_id": (
-                            str(license_response.license_id)
-                            if hasattr(license_response, "license_id")
-                            else None
-                        ),
-                        "status": (
-                            str(license_response.status)
-                            if hasattr(license_response, "status")
-                            else None
-                        ),
-                        "type": (
-                            str(license_response.type)
-                            if hasattr(license_response, "type")
-                            else None
-                        ),
-                        "expiration_date": (
-                            license_response.license_expires
-                            if hasattr(license_response, "license_expires")
-                            else None
-                        ),
-                        "licensed_to": (
-                            license_response.licensed_to
-                            if hasattr(license_response, "licensed_to")
-                            else None
-                        ),
-                        "total_users": (
-                            license_response.total_number
-                            if hasattr(license_response, "total_number")
-                            else None
-                        ),
-                        "used_users": (
-                            license_response.used_number
-                            if hasattr(license_response, "used_number")
-                            else None
-                        ),
-                        "new_users": (
-                            license_response.new_number
-                            if hasattr(license_response, "new_number")
-                            else None
-                        ),
-                    }
-            except Exception as err:
-                _LOGGER.error(
-                    "Failed to fetch license: %s - %s", type(err).__name__, err, exc_info=True
-                )
+            # Note: VB365 API v8 does not provide license_ or service modules
+            # License and server data not available in this API version
 
-            # Get server information
-            try:
-                _LOGGER.debug("Fetching server information from API")
-                server_response = await veeam_client.call(
-                    veeam_client.api("service").service_get_version
-                )
-                _LOGGER.debug("Server response received: %s", type(server_response))
-                if server_response:
-                    data["server"] = {
-                        "version": (
-                            str(server_response.version)
-                            if hasattr(server_response, "version")
-                            else None
-                        ),
-                        "build": (
-                            str(server_response.build)
-                            if hasattr(server_response, "build")
-                            else None
-                        ),
-                    }
-            except Exception as err:
-                _LOGGER.error(
-                    "Failed to fetch server info: %s - %s", type(err).__name__, err, exc_info=True
-                )
-
-            return data
+            return jobs
 
         except PermissionError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
