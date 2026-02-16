@@ -49,26 +49,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Get backup jobs using the veeam-365 library
             # Note: Pass method reference (not call) to veeam_client.call()
-            jobs_response = await veeam_client.call(
-                veeam_client.api("backup_job").backup_job_get_jobs
-            )
+            jobs_response = await veeam_client.call(veeam_client.api("job").job_get)
 
             # Process the response
-            if not jobs_response or not hasattr(jobs_response, "data"):
+            if not jobs_response or not hasattr(jobs_response, "results"):
                 return []
 
             # Convert jobs to a list of dictionaries for easier processing
             jobs = []
-            for job in jobs_response.data:
+            for job in jobs_response.results:
+                # Convert last_status enum to lowercase string
+                status = "unknown"
+                if hasattr(job, "last_status") and job.last_status:
+                    status = str(job.last_status).lower()
+
                 jobs.append(
                     {
-                        "id": getattr(job, "id", None),
-                        "name": getattr(job, "name", "Unknown"),
-                        "status": getattr(job, "status", "unknown"),
-                        "type": getattr(job, "type", None),
-                        "last_run": getattr(job, "last_run", None),
-                        "next_run": getattr(job, "next_run", None),
-                        "last_result": getattr(job, "last_result", None),
+                        "id": str(job.id) if job.id else None,
+                        "name": job.name if hasattr(job, "name") else "Unknown",
+                        "status": status,
+                        "backup_type": (
+                            str(job.backup_type)
+                            if hasattr(job, "backup_type") and job.backup_type
+                            else None
+                        ),
+                        "last_run": job.last_run if hasattr(job, "last_run") else None,
+                        "next_run": job.next_run if hasattr(job, "next_run") else None,
+                        "is_enabled": job.is_enabled if hasattr(job, "is_enabled") else None,
+                        "total_objects": (
+                            job.total_objects if hasattr(job, "total_objects") else None
+                        ),
+                        "processed_objects": (
+                            job.processed_objects if hasattr(job, "processed_objects") else None
+                        ),
                     }
                 )
 

@@ -75,10 +75,12 @@ class VeeamJobSensor(CoordinatorEntity, SensorEntity):
             return {
                 "job_id": job_data.get("id"),
                 "job_name": job_data.get("name"),
-                "job_type": job_data.get("type"),
+                "backup_type": job_data.get("backup_type"),
                 "last_run": job_data.get("last_run"),
                 "next_run": job_data.get("next_run"),
-                "last_result": job_data.get("last_result"),
+                "is_enabled": job_data.get("is_enabled"),
+                "total_objects": job_data.get("total_objects"),
+                "processed_objects": job_data.get("processed_objects"),
             }
 
         return {}
