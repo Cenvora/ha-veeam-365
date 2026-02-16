@@ -36,24 +36,43 @@ async def async_get_config_entry_diagnostics(
             ),
             "update_interval": str(coordinator.update_interval),
         },
-        "jobs_count": len(coordinator.data) if coordinator.data else 0,
+        # coordinator.data may be a dict with a "jobs" key or a flat list of jobs
+        "jobs_count": (
+            len(
+                coordinator.data.get("jobs")
+                if isinstance(coordinator.data, dict)
+                else coordinator.data
+            )
+            if coordinator.data
+            else 0
+        ),
     }
 
     # Add sanitized job information
     if coordinator.data:
-        jobs_info = []
-        for job in coordinator.data:
-            jobs_info.append(
-                {
-                    "id": job.get("id"),
-                    "name": job.get("name"),
-                    "status": job.get("status"),
-                    "backup_type": job.get("backup_type"),
-                    "is_enabled": job.get("is_enabled"),
-                    "total_objects": job.get("total_objects"),
-                    "processed_objects": job.get("processed_objects"),
-                }
-            )
-        diagnostics_data["jobs"] = jobs_info
+        # Support both the new dict structure and the legacy flat list structure
+        jobs = (
+            coordinator.data.get("jobs")
+            if isinstance(coordinator.data, dict)
+            else coordinator.data
+        )
+        if jobs:
+            jobs_info = []
+            for job in jobs:
+                # Ensure we only process dict-like job entries
+                if not isinstance(job, dict):
+                    continue
+                jobs_info.append(
+                    {
+                        "id": job.get("id"),
+                        "name": job.get("name"),
+                        "status": job.get("status"),
+                        "backup_type": job.get("backup_type"),
+                        "is_enabled": job.get("is_enabled"),
+                        "total_objects": job.get("total_objects"),
+                        "processed_objects": job.get("processed_objects"),
+                    }
+                )
+            diagnostics_data["jobs"] = jobs_info
 
     return diagnostics_data
