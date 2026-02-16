@@ -10,19 +10,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.selector import (
-    BooleanSelector,
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
-    TextSelector,
-    TextSelectorConfig,
-    TextSelectorType,
-)
+from homeassistant.helpers import config_validation as cv, selector
 import voluptuous as vol
 
 from .const import (
@@ -117,23 +105,19 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show the form
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                vol.Required(CONF_HOST): selector.TextSelector(),
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
                 ),
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): NumberSelector(
-                    NumberSelectorConfig(min=1, max=65535, mode=NumberSelectorMode.BOX)
+                vol.Required(CONF_USERNAME): selector.TextSelector(),
+                vol.Required(CONF_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
-                vol.Required(CONF_USERNAME): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
-                vol.Required(CONF_PASSWORD): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                ),
-                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): BooleanSelector(),
-                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): SelectSelector(
-                    SelectSelectorConfig(
+                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): selector.BooleanSelector(),
+                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
                         options=list(API_VERSIONS.keys()),
-                        mode=SelectSelectorMode.DROPDOWN,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
             }
@@ -173,11 +157,9 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show form with username and password
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
-                vol.Required(CONF_PASSWORD): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): selector.TextSelector(),
+                vol.Required(CONF_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
             }
         )
@@ -209,31 +191,27 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show form with all configuration options
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
+                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): selector.TextSelector(),
                 vol.Required(
                     CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)
-                ): NumberSelector(
-                    NumberSelectorConfig(min=1, max=65535, mode=NumberSelectorMode.BOX)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
                 ),
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
-                vol.Required(CONF_PASSWORD): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): selector.TextSelector(),
+                vol.Required(CONF_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
                 vol.Optional(
                     CONF_VERIFY_SSL,
                     default=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                ): BooleanSelector(),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     CONF_API_VERSION,
                     default=entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-                ): SelectSelector(
-                    SelectSelectorConfig(
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
                         options=list(API_VERSIONS.keys()),
-                        mode=SelectSelectorMode.DROPDOWN,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
             }
