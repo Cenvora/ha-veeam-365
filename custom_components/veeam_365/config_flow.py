@@ -132,6 +132,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             try:
                 await vc.close()
                 _LOGGER.debug("Closed validation VeeamClient")
+                # Add a small delay to allow server to clean up the session
+                # This prevents race conditions when async_setup_entry is called
+                # immediately after config flow validation
+                await asyncio.sleep(0.5)
             except Exception as err:
                 _LOGGER.warning("Error closing validation client: %s", err)
 
