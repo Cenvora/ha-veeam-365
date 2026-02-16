@@ -92,7 +92,6 @@ def test_api_module_name_consistency(component_path):
     assert 'veeam_client.api, "copy_job"' in init_content, (
         "__init__.py should use singular 'copy_job'"
     )
-    # Note: backup_repository uses getattr, not api() method
-    assert 'getattr(veeam_client, "backup_repository"' in init_content, (
-        "__init__.py should reference 'backup_repository'"
+    assert 'veeam_client.api, "backup_repository"' in init_content, (
+        "__init__.py should use singular 'backup_repository'"
     )
