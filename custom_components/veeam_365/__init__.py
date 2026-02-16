@@ -81,7 +81,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Get backup jobs
             try:
                 _LOGGER.debug("Fetching backup jobs from API")
-                jobs_response = await veeam_client.call(veeam_client.api("job").job_get)
+                
+                # Wrap in executor to avoid blocking import_module calls
+                def _get_jobs_sync():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        return loop.run_until_complete(
+                            veeam_client.call(veeam_client.api("job").job_get)
+                        )
+                    finally:
+                        loop.close()
+                
+                jobs_response = await hass.async_add_executor_job(_get_jobs_sync)
                 _LOGGER.debug("Jobs response received: %s", type(jobs_response))
                 if jobs_response and hasattr(jobs_response, "results"):
                     for job in jobs_response.results:
@@ -123,7 +135,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Get license information
             try:
                 _LOGGER.debug("Fetching license from API")
-                license_response = await veeam_client.call(veeam_client.api("license_").license_get)
+                
+                # Wrap in executor to avoid blocking import_module calls
+                def _get_license_sync():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        return loop.run_until_complete(
+                            veeam_client.call(veeam_client.api("license_").license_get)
+                        )
+                    finally:
+                        loop.close()
+                
+                license_response = await hass.async_add_executor_job(_get_license_sync)
                 _LOGGER.debug("License response received: %s", type(license_response))
                 if license_response:
                     license_data = {
