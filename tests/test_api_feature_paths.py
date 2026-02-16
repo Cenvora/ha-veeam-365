@@ -1,13 +1,21 @@
 """Test API feature path correctness."""
 
+from pathlib import Path
 
-def test_sensor_api_feature_paths():
+import pytest
+
+
+@pytest.fixture
+def component_path():
+    """Return the base path to the custom component."""
+    return Path(__file__).parent.parent / "custom_components" / "veeam_365"
+
+
+def test_sensor_api_feature_paths(component_path):
     """Test that sensor.py uses correct API feature paths."""
-    from pathlib import Path
+    sensor_path = component_path / "sensor.py"
 
-    sensor_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "sensor.py"
-
-    with open(sensor_path) as f:
+    with open(sensor_path, encoding="utf-8") as f:
         sensor_content = f.read()
 
     # Verify correct API module names are used (singular form)
@@ -33,13 +41,11 @@ def test_sensor_api_feature_paths():
     ), "Should not use plural 'api.repositories'"
 
 
-def test_button_api_feature_paths():
+def test_button_api_feature_paths(component_path):
     """Test that button.py uses correct API feature paths."""
-    from pathlib import Path
+    button_path = component_path / "button.py"
 
-    button_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "button.py"
-
-    with open(button_path) as f:
+    with open(button_path, encoding="utf-8") as f:
         button_content = f.read()
 
     # Verify correct API module names are used (singular form)
@@ -53,13 +59,11 @@ def test_button_api_feature_paths():
     )
 
 
-def test_const_api_feature_requirements():
+def test_const_api_feature_requirements(component_path):
     """Test that const.py documents correct API feature paths."""
-    from pathlib import Path
+    const_path = component_path / "const.py"
 
-    const_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "const.py"
-
-    with open(const_path) as f:
+    with open(const_path, encoding="utf-8") as f:
         const_content = f.read()
 
     # Verify that API_FEATURE_REQUIREMENTS uses correct module names
@@ -74,13 +78,11 @@ def test_const_api_feature_requirements():
     )
 
 
-def test_api_module_name_consistency():
+def test_api_module_name_consistency(component_path):
     """Test that API module names are consistent between __init__.py and feature checks."""
-    from pathlib import Path
+    init_path = component_path / "__init__.py"
 
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
+    with open(init_path, encoding="utf-8") as f:
         init_content = f.read()
 
     # Verify __init__.py uses singular API module names
