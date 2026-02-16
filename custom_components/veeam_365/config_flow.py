@@ -143,6 +143,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                     logout_async_func = getattr(logout_module, "asyncio")
                     await vc.call(logout_async_func)
                     _LOGGER.debug("Successfully logged out validation VeeamClient")
+                    # Give server time to process logout before setup creates new session
+                    await asyncio.sleep(1.0)
                 except Exception as logout_err:
                     _LOGGER.debug(
                         "Could not logout validation client: %s (type: %s)",
