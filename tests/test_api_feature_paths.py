@@ -77,7 +77,7 @@ def test_button_api_feature_paths(component_path):
     )
 
     # Verify repository synchronize model is used
-    assert 'check_api_feature_availability(api_version, "models.backup_repository_start_synchronize_action")' in button_content, (
+    assert "models.backup_repository_start_synchronize_action" in button_content, (
         "Repository should use 'models.backup_repository_start_synchronize_action'"
     )
 

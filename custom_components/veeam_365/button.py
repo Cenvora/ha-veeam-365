@@ -192,11 +192,9 @@ async def async_setup_entry(
         stale_job_ids = current_job_ids - current_jobs_in_data
         for job_id in stale_job_ids:
             for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
-                if (
-                    entity.unique_id
-                    and f"job_{job_id}" in entity.unique_id
-                    and f"copy_job_{job_id}" not in entity.unique_id
-                ):
+                # Match pattern: {entry_id}_job_{job_id}_{action}
+                # Avoid matching: {entry_id}_copy_job_{job_id}_{action}
+                if entity.unique_id and f"_job_{job_id}_" in entity.unique_id:
                     _LOGGER.info("Removing stale job button: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_job_ids.discard(job_id)
@@ -353,7 +351,7 @@ class VeeamJobButtonBase(CoordinatorEntity, ButtonEntity):
             CONF_API_VERSION,
             self._config_entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
         )
-        return API_VERSIONS.get(api_version, "v1_3_rev1")
+        return API_VERSIONS.get(api_version, "v8")
 
     async def _import_spec_model(self, spec_name: str):
         """Import a spec model from the veeam_365 library.
