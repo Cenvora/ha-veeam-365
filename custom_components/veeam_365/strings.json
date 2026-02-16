@@ -1,0 +1,150 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Veeam Backup for Microsoft 365",
+        "description": "Enter your Veeam Backup for Microsoft 365 server details.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL Certificate",
+          "api_version": "API Version"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port (default: 4443)",
+          "username": "Username with administrator privileges",
+          "password": "Password for the specified user account",
+          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
+          "api_version": "Veeam REST API version to use"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Veeam Backup for Microsoft 365",
+        "description": "Update the connection details for {host}.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL Certificate"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate to Veeam Backup for Microsoft 365",
+        "description": "The authentication credentials for {host} are no longer valid. Please enter new credentials.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "Administrator username",
+          "password": "User password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Veeam server",
+      "invalid_auth": "Invalid authentication credentials",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This Veeam server is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Reconfiguration was successful",
+      "cannot_connect": "Failed to connect to Veeam server",
+      "invalid_auth": "Invalid authentication credentials",
+      "unknown": "Unexpected error occurred"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Veeam Backup for Microsoft 365 Options",
+        "description": "Configure Veeam Backup for Microsoft 365 integration settings.",
+        "data": {
+          "api_version": "API Version"
+        },
+        "data_description": {
+          "api_version": "Select the Veeam REST API version to use for this integration"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Veeam server",
+      "invalid_auth": "Invalid authentication credentials",
+      "unknown": "Unexpected error occurred"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "job_status": {
+        "name": "Status"
+      },
+      "job_last_run": {
+        "name": "Last run"
+      },
+      "job_next_run": {
+        "name": "Next run"
+      },
+      "organization_status": {
+        "name": "Status"
+      },
+      "repository_type": {
+        "name": "Type"
+      },
+      "license_status": {
+        "name": "Status"
+      },
+      "license_expiration": {
+        "name": "Expiration date"
+      },
+      "license_users": {
+        "name": "Used users"
+      },
+      "server_last_poll": {
+        "name": "Last successful poll"
+      }
+    },
+    "button": {
+      "job_start": {
+        "name": "Start"
+      },
+      "job_stop": {
+        "name": "Stop"
+      },
+      "job_retry": {
+        "name": "Retry"
+      }
+    }
+  },
+  "exceptions": {
+    "connection_error": {
+      "message": "Failed to connect to Veeam server at {host}:{port}"
+    },
+    "authentication_failed": {
+      "message": "Authentication failed for user {username}"
+    },
+    "api_error": {
+      "message": "Veeam API error: {error}"
+    },
+    "job_start_failed": {
+      "message": "Failed to start job {job_name}: {error}"
+    },
+    "job_stop_failed": {
+      "message": "Failed to stop job {job_name}: {error}"
+    },
+    "job_retry_failed": {
+      "message": "Failed to retry job {job_name}: {error}"
+    }
+  }
+}
