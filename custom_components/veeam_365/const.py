@@ -20,24 +20,46 @@ DEFAULT_API_VERSION = "v8"
 _LOGGER = logging.getLogger(__name__)
 
 
+def _get_default_versions() -> dict[str, str]:
+    """Get default API versions as fallback.
+
+    Returns:
+        dict: Default version mapping
+    """
+    return {
+        "v6": "v6",
+        "v7": "v7",
+        "v8": "v8",
+    }
+
+
+def _log_safe(level: str, message: str, *args) -> None:
+    """Log message safely, handling cases where logger is not ready.
+
+    Args:
+        level: Log level (warning, debug, error)
+        message: Log message format string
+        *args: Arguments for message formatting
+    """
+    try:
+        log_func = getattr(_LOGGER, level)
+        log_func(message, *args)
+    except Exception:
+        pass  # Logger not ready yet
+
+
 def _discover_api_versions() -> dict[str, str]:
     """Dynamically discover available API versions from the veeam-365 package.
 
     Returns:
         dict: Mapping of display version (e.g., "v8") to module name (e.g., "v8")
     """
-    versions = {}
-
     try:
         # Find the veeam_365 package
         spec = importlib.util.find_spec("veeam_365")
         if spec is None:
-            _LOGGER.warning("veeam_365 package not found, using default API versions")
-            return {
-                "v6": "v6",
-                "v7": "v7",
-                "v8": "v8",
-            }
+            _log_safe("warning", "veeam_365 package not found, using default API versions")
+            return _get_default_versions()
 
         # Get the package directory (handle namespace packages)
         if spec.submodule_search_locations:
@@ -45,44 +67,30 @@ def _discover_api_versions() -> dict[str, str]:
         elif spec.origin:
             veeam_365_path = os.path.dirname(spec.origin)
         else:
-            _LOGGER.warning("Could not determine veeam_365 package path, using defaults")
-            return {
-                "v6": "v6",
-                "v7": "v7",
-                "v8": "v8",
-            }
+            _log_safe("warning", "Could not determine veeam_365 package path, using defaults")
+            return _get_default_versions()
 
         # Pattern to match version directories: v{major}
         api_version_pattern = re.compile(r"^v(\d+)$")
 
         # Scan for version directories
+        versions = {}
         for item in os.listdir(veeam_365_path):
             item_path = os.path.join(veeam_365_path, item)
             if os.path.isdir(item_path) and api_version_pattern.match(item):
-                match = api_version_pattern.match(item)
-                if match:
-                    # Use the same format for both key and value: "v8"
-                    versions[item] = item
+                # Use the same format for both key and value: "v8"
+                versions[item] = item
 
         if not versions:
-            _LOGGER.warning("No API versions found in veeam_365 package, using defaults")
-            return {
-                "v6": "v6",
-                "v7": "v7",
-                "v8": "v8",
-            }
+            _log_safe("warning", "No API versions found in veeam_365 package, using defaults")
+            return _get_default_versions()
 
-        _LOGGER.debug("Discovered API versions: %s", list(versions.keys()))
+        _log_safe("debug", "Discovered API versions: %s", list(versions.keys()))
+        return versions
 
     except Exception as err:
-        _LOGGER.warning("Failed to discover API versions: %s, using defaults", err)
-        return {
-            "v6": "v6",
-            "v7": "v7",
-            "v8": "v8",
-        }
-
-    return versions
+        _log_safe("warning", "Failed to discover API versions: %s, using defaults", err)
+        return _get_default_versions()
 
 
 # API Version options - dynamically discovered from veeam-365 package
