@@ -1,4 +1,4 @@
-"""Support for Veeam Backup & Replication sensors."""
+"""Support for Veeam Backup for Microsoft 365 sensors."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Veeam Backup & Replication sensors from a config entry."""
+    """Set up Veeam Backup for Microsoft 365 sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     # Create sensors for each backup job
@@ -102,7 +102,7 @@ class VeeamJobSensor(CoordinatorEntity, SensorEntity):
         """Return device information about this entity."""
         return {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": f"Veeam BR ({self._config_entry.data.get('host', 'Unknown')})",
+            "name": f"Veeam 365 ({self._config_entry.data.get('host', 'Unknown')})",
             "manufacturer": "Veeam",
-            "model": "Backup & Replication",
+            "model": "Backup for Microsoft 365",
         }

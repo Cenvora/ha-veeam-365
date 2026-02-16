@@ -1,4 +1,4 @@
-"""Config flow for Veeam Backup & Replication integration."""
+"""Config flow for Veeam Backup for Microsoft 365 integration."""
 
 from __future__ import annotations
 
@@ -27,15 +27,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from DATA_SCHEMA with values provided by the user.
     """
-    # Import the veeam_br library
+    # Import the veeam_365 library
     try:
-        from veeam_br.v1_3_rev1 import Client
-        from veeam_br.v1_3_rev1.api.login import create_token
-        from veeam_br.v1_3_rev1.models.e_login_grant_type import ELoginGrantType
-        from veeam_br.v1_3_rev1.models.token_login_spec import TokenLoginSpec
+        from veeam_365.client import VeeamClient
     except ImportError as err:
-        _LOGGER.error("Failed to import veeam_br library: %s", err)
-        raise ConnectionError("veeam_br library not installed") from err
+        _LOGGER.error("Failed to import veeam_365 library: %s", err)
+        raise ConnectionError("veeam_365 library not installed") from err
 
     # Construct base URL
     base_url = f"https://{data[CONF_HOST]}:{data[CONF_PORT]}"
@@ -43,22 +40,22 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Test connection by attempting to authenticate
     try:
 
-        def _test_connection():
-            client = Client(
-                base_url=base_url, verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
-            )
-            body = TokenLoginSpec(
-                grant_type=ELoginGrantType.PASSWORD,
+        async def _test_connection():
+            client = VeeamClient(
+                host=base_url,
                 username=data[CONF_USERNAME],
                 password=data[CONF_PASSWORD],
+                verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                api_version="v8",
             )
-            with client:
-                return create_token.sync(client=client, body=body, x_api_version="1.3-rev1")
+            await client.connect()
+            await client.close()
+            return True
 
-        token_result = await hass.async_add_executor_job(_test_connection)
+        result = await _test_connection()
 
-        if not token_result or not token_result.access_token:
-            raise PermissionError("Authentication failed - no access token received")
+        if not result:
+            raise PermissionError("Authentication failed")
 
     except PermissionError as err:
         _LOGGER.error("Authentication failed: %s", err)
@@ -71,11 +68,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise ConnectionError(f"Failed to connect: {err}") from err
 
     # Return info that you want to store in the config entry.
-    return {"title": f"Veeam BR ({data[CONF_HOST]})"}
+    return {"title": f"Veeam 365 ({data[CONF_HOST]})"}
 
 
-class VeeamBRConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Veeam Backup & Replication."""
+class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Veeam Backup for Microsoft 365."""
 
     VERSION = 1
 

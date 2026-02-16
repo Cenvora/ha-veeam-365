@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Veeam Backup & Replication",
-        "description": "Enter your Veeam Backup & Replication server details.",
+        "title": "Connect to Veeam Backup for Microsoft 365",
+        "description": "Enter your Veeam Backup for Microsoft 365 server details.",
         "data": {
           "host": "Host",
           "port": "Port",

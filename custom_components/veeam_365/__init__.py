@@ -1,4 +1,4 @@
-"""The Veeam Backup & Replication integration."""
+"""The Veeam Backup for Microsoft 365 integration."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL, DOMAIN, UPDATE_INTERVAL
-from .token_manager import VeeamTokenManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,12 +18,12 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Veeam Backup & Replication from a config entry."""
-    # Import the veeam_br library
+    """Set up Veeam Backup for Microsoft 365 from a config entry."""
+    # Import the veeam_365 library
     try:
-        from veeam_br.v1_3_rev1.api.jobs import get_all_jobs
+        from veeam_365.client import VeeamClient
     except ImportError as err:
-        _LOGGER.error("Failed to import veeam_br library: %s", err)
+        _LOGGER.error("Failed to import veeam_365 library: %s", err)
         return False
 
     # Construct base URL
@@ -32,32 +31,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data[CONF_PORT]
     base_url = f"https://{host}:{port}"
 
-    # Create token manager for handling token refresh
-    token_manager = VeeamTokenManager(
-        base_url=base_url,
+    # Create VeeamClient for API interactions
+    veeam_client = VeeamClient(
+        host=base_url,
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         verify_ssl=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        api_version="v8",
     )
 
     # Create update coordinator
     async def async_update_data():
         """Fetch data from API."""
         try:
-            # Ensure we have a valid token before making API calls
-            if not await token_manager.ensure_valid_token(hass):
-                raise UpdateFailed("Failed to obtain valid access token")
+            # Ensure client is connected
+            if not veeam_client._authenticated_client:
+                await veeam_client.connect()
 
-            # Get authenticated client
-            client = token_manager.get_authenticated_client()
-            if not client:
-                raise UpdateFailed("No authenticated client available")
-
-            # Get backup jobs and their status using the veeam-br library
-            def _get_jobs():
-                return get_all_jobs.sync(client=client, x_api_version="1.3-rev1")
-
-            jobs_response = await hass.async_add_executor_job(_get_jobs)
+            # Get backup jobs using the veeam-365 library
+            jobs_response = await veeam_client.call(
+                veeam_client.api("backup_job").backup_job_get_jobs
+            )
 
             # Process the response
             if not jobs_response or not hasattr(jobs_response, "data"):
@@ -94,11 +88,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
-    # Store coordinator and token manager
+    # Store coordinator and veeam client
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "token_manager": token_manager,
+        "veeam_client": veeam_client,
     }
 
     # Forward setup to platforms
@@ -109,6 +103,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Close the Veeam client
+    veeam_client = hass.data[DOMAIN][entry.entry_id].get("veeam_client")
+    if veeam_client:
+        await veeam_client.close()
+
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
