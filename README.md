@@ -161,7 +161,7 @@ flake8 custom_components/
 mypy custom_components/ --ignore-missing-imports
 
 # Validate JSON
-python -m json.tool custom_components/veeam_br/manifest.json
+python -m json.tool custom_components/veeam_365/manifest.json
 ```
 
 ### CI/CD

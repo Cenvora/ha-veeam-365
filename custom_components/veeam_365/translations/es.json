@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar a Veeam Backup for Microsoft 365",
+        "description": "Ingrese los detalles de su servidor Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "username": "Nombre de usuario",
+          "password": "Contraseña",
+          "verify_ssl": "Verificar certificado SSL",
+          "api_version": "Versión de API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port (default: 4443)",
+          "username": "Username with administrator privileges",
+          "password": "Password for the specified user account",
+          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
+          "api_version": "Veeam REST API version to use"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reautenticar Veeam Backup for Microsoft 365",
+        "description": "Las credenciales de su servidor Veeam deben actualizarse.",
+        "data": {
+          "username": "Nombre de usuario",
+          "password": "Contraseña"
+        },
+        "data_description": {
+          "username": "Administrator username",
+          "password": "User password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar Veeam Backup for Microsoft 365",
+        "description": "Actualice la configuración de su servidor Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "username": "Nombre de usuario",
+          "password": "Contraseña",
+          "verify_ssl": "Verificar certificado SSL",
+          "api_version": "Versión de API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar al servidor Veeam",
+      "invalid_auth": "Credenciales de autenticación inválidas",
+      "unknown": "Ocurrió un error inesperado"
+    },
+    "abort": {
+      "already_configured": "Este servidor Veeam ya está configurado",
+      "reauth_successful": "Reautenticación exitosa",
+      "reconfigure_successful": "Reconfiguración exitosa",
+      "cannot_connect": "No se pudo conectar al servidor Veeam",
+      "invalid_auth": "Credenciales de autenticación inválidas",
+      "unknown": "Ocurrió un error inesperado"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Veeam Backup for Microsoft 365",
+        "description": "Configure los ajustes de la integración de Veeam Backup for Microsoft 365.",
+        "data": {
+          "api_version": "Versión de API"
+        },
+        "data_description": {
+          "api_version": "Seleccione la versión de la API REST de Veeam para esta integración"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar al servidor Veeam Backup for Microsoft 365",
+      "invalid_auth": "Credenciales de autenticación inválidas",
+      "unknown": "Ocurrió un error inesperado"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "连接到 Veeam Backup for Microsoft 365",
+        "description": "输入您的 Veeam Backup for Microsoft 365 服务器详细信息。",
+        "data": {
+          "host": "主机",
+          "port": "端口",
+          "username": "用户名",
+          "password": "密码",
+          "verify_ssl": "验证 SSL 证书",
+          "api_version": "API 版本"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port (default: 4443)",
+          "username": "Username with administrator privileges",
+          "password": "Password for the specified user account",
+          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
+          "api_version": "Veeam REST API version to use"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新验证 Veeam Backup for Microsoft 365",
+        "description": "您的 Veeam 服务器凭据需要更新。",
+        "data": {
+          "username": "用户名",
+          "password": "密码"
+        },
+        "data_description": {
+          "username": "Administrator username",
+          "password": "User password"
+        }
+      },
+      "reconfigure": {
+        "title": "重新配置 Veeam Backup for Microsoft 365",
+        "description": "更新您的 Veeam Backup for Microsoft 365 服务器配置。",
+        "data": {
+          "host": "主机",
+          "port": "端口",
+          "username": "用户名",
+          "password": "密码",
+          "verify_ssl": "验证 SSL 证书",
+          "api_version": "API 版本"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到 Veeam 服务器",
+      "invalid_auth": "身份验证凭据无效",
+      "unknown": "发生意外错误"
+    },
+    "abort": {
+      "already_configured": "此 Veeam 服务器已配置",
+      "reauth_successful": "重新验证成功",
+      "reconfigure_successful": "重新配置成功",
+      "cannot_connect": "无法连接到 Veeam 服务器",
+      "invalid_auth": "身份验证凭据无效",
+      "unknown": "发生意外错误"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Veeam Backup for Microsoft 365 选项",
+        "description": "配置 Veeam Backup for Microsoft 365 集成设置。",
+        "data": {
+          "api_version": "API 版本"
+        },
+        "data_description": {
+          "api_version": "选择用于此集成的 Veeam REST API 版本"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到 Veeam Backup for Microsoft 365 服务器",
+      "invalid_auth": "身份验证凭据无效",
+      "unknown": "发生意外错误"
+    }
+  }
+}

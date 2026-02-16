@@ -85,7 +85,7 @@ jobs:
           import json
           import sys
           
-          manifest_path = 'custom_components/veeam_br/manifest.json'
+          manifest_path = 'custom_components/veeam_365/manifest.json'
           with open(manifest_path) as f:
               manifest = json.load(f)
           
