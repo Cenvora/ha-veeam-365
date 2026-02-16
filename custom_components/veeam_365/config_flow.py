@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -58,7 +59,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     try:
 
-        async def _test_connection():
+        def _test_connection():
             vc = VeeamClient(
                 host=base_url,
                 username=data[CONF_USERNAME],
@@ -66,10 +67,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 api_version=api_version,
                 verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
             )
-            await vc.connect()
+            # Run the blocking connect operation in a thread
             return vc
 
-        vc = await _test_connection()
+        vc = await asyncio.to_thread(_test_connection)
+
+        # Connect in a thread to avoid blocking the event loop
+        await asyncio.to_thread(vc.connect)
 
         # Verify connection was successful by attempting to access the client
         if not vc:
