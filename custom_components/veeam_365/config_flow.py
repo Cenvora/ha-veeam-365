@@ -109,3 +109,80 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Handle reauth flow."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reauth confirmation."""
+        errors: dict[str, str] = {}
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+
+        if user_input is not None:
+            # Merge with existing data
+            new_data = {**entry.data, **user_input}
+
+            try:
+                await validate_input(self.hass, new_data)
+            except PermissionError:
+                errors["base"] = "invalid_auth"
+            except ConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reauth")
+                errors["base"] = "unknown"
+            else:
+                self.hass.config_entries.async_update_entry(entry, data=new_data)
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+
+        # Show form with username and password
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): cv.string,
+                vol.Required(CONF_PASSWORD): cv.string,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reauth_confirm", data_schema=data_schema, errors=errors
+        )
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle reconfiguration flow."""
+        errors: dict[str, str] = {}
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+
+        if user_input is not None:
+            try:
+                await validate_input(self.hass, user_input)
+            except PermissionError:
+                errors["base"] = "invalid_auth"
+            except ConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+            else:
+                self.hass.config_entries.async_update_entry(entry, data=user_input)
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reconfigure_successful")
+
+        # Show form with all configuration options
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): cv.string,
+                vol.Required(CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)): cv.port,
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): cv.string,
+                vol.Required(CONF_PASSWORD): cv.string,
+                vol.Optional(
+                    CONF_VERIFY_SSL,
+                    default=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                ): cv.boolean,
+            }
+        )
+
+        return self.async_show_form(step_id="reconfigure", data_schema=data_schema, errors=errors)

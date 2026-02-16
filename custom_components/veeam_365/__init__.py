@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL, DOMAIN, UPDATE_INTERVAL
@@ -15,6 +17,14 @@ from .const import CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL, DOMAIN, UPDATE_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+
+@dataclass
+class VeeamRuntimeData:
+    """Runtime data for Veeam integration."""
+
+    coordinator: DataUpdateCoordinator
+    veeam_client: any
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -87,6 +97,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             return jobs
 
+        except PermissionError as err:
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
@@ -101,12 +113,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
-    # Store coordinator and veeam client
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "coordinator": coordinator,
-        "veeam_client": veeam_client,
-    }
+    # Store runtime data using runtime_data (Bronze tier requirement)
+    entry.runtime_data = VeeamRuntimeData(
+        coordinator=coordinator,
+        veeam_client=veeam_client,
+    )
 
     # Forward setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -117,14 +128,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     # Close the Veeam client
-    veeam_client = hass.data[DOMAIN][entry.entry_id].get("veeam_client")
-    if veeam_client:
-        await veeam_client.close()
+    if hasattr(entry, "runtime_data") and entry.runtime_data:
+        await entry.runtime_data.veeam_client.close()
 
     # Unload platforms
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

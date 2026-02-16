@@ -11,6 +11,25 @@
           "password": "Password",
           "verify_ssl": "Verify SSL Certificate"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Veeam Backup for Microsoft 365",
+        "description": "The credentials for your Veeam server need to be updated.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Veeam Backup for Microsoft 365",
+        "description": "Update your Veeam Backup for Microsoft 365 server configuration.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL Certificate"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "Unexpected error occurred"
     },
     "abort": {
-      "already_configured": "This Veeam server is already configured"
+      "already_configured": "This Veeam server is already configured",
+      "reauth_successful": "Reauthentication successful",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   }
 }
