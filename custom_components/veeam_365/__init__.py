@@ -73,45 +73,76 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             await hass.async_add_executor_job(_connect_sync)
 
-            # Get backup jobs using the veeam-365 library
-            # Note: Pass method reference (not call) to veeam_client.call()
-            jobs_response = await veeam_client.call(veeam_client.api("job").job_get)
+            # Fetch all data: jobs, license, and server info
+            data = {
+                "jobs": [],
+                "license": None,
+                "server": None,
+            }
 
-            # Process the response
-            if not jobs_response or not hasattr(jobs_response, "results"):
-                return []
+            # Get backup jobs
+            try:
+                jobs_response = await veeam_client.call(veeam_client.api("job").job_get)
+                if jobs_response and hasattr(jobs_response, "results"):
+                    for job in jobs_response.results:
+                        # Convert last_status enum to lowercase string
+                        status = "unknown"
+                        if hasattr(job, "last_status") and job.last_status:
+                            status = str(job.last_status).lower()
 
-            # Convert jobs to a list of dictionaries for easier processing
-            jobs = []
-            for job in jobs_response.results:
-                # Convert last_status enum to lowercase string
-                status = "unknown"
-                if hasattr(job, "last_status") and job.last_status:
-                    status = str(job.last_status).lower()
+                        data["jobs"].append(
+                            {
+                                "id": str(job.id) if job.id else None,
+                                "name": job.name if hasattr(job, "name") else "Unknown",
+                                "status": status,
+                                "backup_type": (
+                                    str(job.backup_type)
+                                    if hasattr(job, "backup_type") and job.backup_type
+                                    else None
+                                ),
+                                "last_run": job.last_run if hasattr(job, "last_run") else None,
+                                "next_run": job.next_run if hasattr(job, "next_run") else None,
+                                "is_enabled": job.is_enabled if hasattr(job, "is_enabled") else None,
+                                "total_objects": (
+                                    job.total_objects if hasattr(job, "total_objects") else None
+                                ),
+                                "processed_objects": (
+                                    job.processed_objects if hasattr(job, "processed_objects") else None
+                                ),
+                            }
+                        )
+            except Exception as err:
+                _LOGGER.warning("Failed to fetch jobs: %s", err)
 
-                jobs.append(
-                    {
-                        "id": str(job.id) if job.id else None,
-                        "name": job.name if hasattr(job, "name") else "Unknown",
-                        "status": status,
-                        "backup_type": (
-                            str(job.backup_type)
-                            if hasattr(job, "backup_type") and job.backup_type
-                            else None
-                        ),
-                        "last_run": job.last_run if hasattr(job, "last_run") else None,
-                        "next_run": job.next_run if hasattr(job, "next_run") else None,
-                        "is_enabled": job.is_enabled if hasattr(job, "is_enabled") else None,
-                        "total_objects": (
-                            job.total_objects if hasattr(job, "total_objects") else None
-                        ),
-                        "processed_objects": (
-                            job.processed_objects if hasattr(job, "processed_objects") else None
-                        ),
+            # Get license information
+            try:
+                license_response = await veeam_client.call(veeam_client.api("license").license_get)
+                if license_response:
+                    data["license"] = {
+                        "license_id": str(license_response.license_id) if hasattr(license_response, "license_id") else None,
+                        "status": str(license_response.status) if hasattr(license_response, "status") else None,
+                        "type": str(license_response.type) if hasattr(license_response, "type") else None,
+                        "expiration_date": license_response.license_expires if hasattr(license_response, "license_expires") else None,
+                        "licensed_to": license_response.licensed_to if hasattr(license_response, "licensed_to") else None,
+                        "total_users": license_response.total_number if hasattr(license_response, "total_number") else None,
+                        "used_users": license_response.used_number if hasattr(license_response, "used_number") else None,
+                        "new_users": license_response.new_number if hasattr(license_response, "new_number") else None,
                     }
-                )
+            except Exception as err:
+                _LOGGER.warning("Failed to fetch license: %s", err)
 
-            return jobs
+            # Get server information
+            try:
+                server_response = await veeam_client.call(veeam_client.api("service").service_get_version)
+                if server_response:
+                    data["server"] = {
+                        "version": str(server_response.version) if hasattr(server_response, "version") else None,
+                        "build": str(server_response.build) if hasattr(server_response, "build") else None,
+                    }
+            except Exception as err:
+                _LOGGER.warning("Failed to fetch server info: %s", err)
+
+            return data
 
         except PermissionError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err

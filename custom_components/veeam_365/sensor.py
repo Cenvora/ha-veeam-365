@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,13 +27,218 @@ async def async_setup_entry(
     """Set up Veeam Backup for Microsoft 365 sensors from a config entry."""
     coordinator = entry.runtime_data.coordinator
 
-    # Create sensors for each backup job
+    # Create sensors
     entities = []
+    
     if coordinator.data:
-        for job in coordinator.data:
+        # Create license sensors
+        if coordinator.data.get("license"):
+            entities.extend([
+                VeeamLicenseStatusSensor(coordinator, entry),
+                VeeamLicenseTypeSensor(coordinator, entry),
+                VeeamLicenseExpirationSensor(coordinator, entry),
+                VeeamLicenseUsageSensor(coordinator, entry),
+            ])
+        
+        # Create server sensors
+        if coordinator.data.get("server"):
+            entities.extend([
+                VeeamServerVersionSensor(coordinator, entry),
+            ])
+        
+        # Create sensors for each backup job (each job gets its own device)
+        for job in coordinator.data.get("jobs", []):
             entities.append(VeeamJobSensor(coordinator, entry, job))
 
     async_add_entities(entities)
+
+
+class VeeamLicenseStatusSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Veeam License Status sensor."""
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_license_status"
+        self._attr_name = "License Status"
+        self._attr_icon = "mdi:license"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            return self.coordinator.data["license"].get("status", "unknown")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            license_data = self.coordinator.data["license"]
+            return {
+                "license_id": license_data.get("license_id"),
+                "licensed_to": license_data.get("licensed_to"),
+                "type": license_data.get("type"),
+                "expiration_date": license_data.get("expiration_date"),
+            }
+        return {}
+
+    @property
+    def device_info(self):
+        """Return device information about this entity."""
+        return {
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_license")},
+            "name": "Veeam 365 License",
+            "manufacturer": "Veeam",
+            "model": "License Information",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
+        }
+
+
+class VeeamLicenseTypeSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Veeam License Type sensor."""
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_license_type"
+        self._attr_name = "License Type"
+        self._attr_icon = "mdi:card-account-details"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            return self.coordinator.data["license"].get("type")
+        return None
+
+    @property
+    def device_info(self):
+        """Return device information about this entity."""
+        return {
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_license")},
+            "name": "Veeam 365 License",
+            "manufacturer": "Veeam",
+            "model": "License Information",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
+        }
+
+
+class VeeamLicenseExpirationSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Veeam License Expiration sensor."""
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_license_expiration"
+        self._attr_name = "License Expiration"
+        self._attr_icon = "mdi:calendar-clock"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            return self.coordinator.data["license"].get("expiration_date")
+        return None
+
+    @property
+    def device_info(self):
+        """Return device information about this entity."""
+        return {
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_license")},
+            "name": "Veeam 365 License",
+            "manufacturer": "Veeam",
+            "model": "License Information",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
+        }
+
+
+class VeeamLicenseUsageSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Veeam License Usage sensor."""
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_license_usage"
+        self._attr_name = "License Usage"
+        self._attr_icon = "mdi:account-multiple"
+        self._attr_native_unit_of_measurement = "users"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            return self.coordinator.data["license"].get("used_users")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data and self.coordinator.data.get("license"):
+            license_data = self.coordinator.data["license"]
+            return {
+                "total_users": license_data.get("total_users"),
+                "used_users": license_data.get("used_users"),
+                "new_users": license_data.get("new_users"),
+            }
+        return {}
+
+    @property
+    def device_info(self):
+        """Return device information about this entity."""
+        return {
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_license")},
+            "name": "Veeam 365 License",
+            "manufacturer": "Veeam",
+            "model": "License Information",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
+        }
+
+
+class VeeamServerVersionSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Veeam Server Version sensor."""
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_server_version"
+        self._attr_name = "Server Version"
+        self._attr_icon = "mdi:server"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data and self.coordinator.data.get("server"):
+            return self.coordinator.data["server"].get("version")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data and self.coordinator.data.get("server"):
+            server_data = self.coordinator.data["server"]
+            return {
+                "version": server_data.get("version"),
+                "build": server_data.get("build"),
+            }
+        return {}
+
+    @property
+    def device_info(self):
+        """Return device information about this entity."""
+        return {
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_server")},
+            "name": "Veeam 365 Server",
+            "manufacturer": "Veeam",
+            "model": "Backup for Microsoft 365",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
+        }
 
 
 class VeeamJobSensor(CoordinatorEntity, SensorEntity):
@@ -47,15 +252,15 @@ class VeeamJobSensor(CoordinatorEntity, SensorEntity):
         self._job_name = job_data.get("name", "Unknown Job")
 
         # Set unique ID
-        self._attr_unique_id = f"{config_entry.entry_id}_{self._job_id}"
-        self._attr_name = f"Veeam {self._job_name}"
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}"
+        self._attr_name = "Status"
 
     def _find_job_data(self) -> dict[str, Any] | None:
         """Find the job data for this sensor from coordinator data."""
-        if not self.coordinator.data:
+        if not self.coordinator.data or not self.coordinator.data.get("jobs"):
             return None
 
-        for job in self.coordinator.data:
+        for job in self.coordinator.data["jobs"]:
             job_id = job.get("id", job.get("name"))
             if job_id == self._job_id:
                 return job
@@ -106,8 +311,9 @@ class VeeamJobSensor(CoordinatorEntity, SensorEntity):
     def device_info(self):
         """Return device information about this entity."""
         return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": f"Veeam 365 ({self._config_entry.data.get('host', 'Unknown')})",
+            "identifiers": {(DOMAIN, f"{self._config_entry.entry_id}_job_{self._job_id}")},
+            "name": f"{self._job_name}",
             "manufacturer": "Veeam",
-            "model": "Backup for Microsoft 365",
+            "model": "Backup Job",
+            "via_device": (DOMAIN, self._config_entry.entry_id),
         }
