@@ -44,9 +44,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def async_update_data():
         """Fetch data from API."""
         try:
-            # Ensure client is connected
-            if not veeam_client._authenticated_client:
-                await veeam_client.connect()
+            # Ensure client is connected (VeeamClient handles idempotency)
+            await veeam_client.connect()
 
             # Get backup jobs using the veeam-365 library
             jobs_response = await veeam_client.call(
