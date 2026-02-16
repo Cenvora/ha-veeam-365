@@ -97,16 +97,24 @@ async def async_setup_entry(
 
             # Check if each button type's API feature is available before creating
             if check_api_feature_availability(api_version, "models.copy_job_start_action"):
-                copy_job_buttons.append(VeeamCopyJobStartButton(coordinator, entry, copy_job, veeam_client))
+                copy_job_buttons.append(
+                    VeeamCopyJobStartButton(coordinator, entry, copy_job, veeam_client)
+                )
 
             if check_api_feature_availability(api_version, "models.copy_job_stop_action"):
-                copy_job_buttons.append(VeeamCopyJobStopButton(coordinator, entry, copy_job, veeam_client))
+                copy_job_buttons.append(
+                    VeeamCopyJobStopButton(coordinator, entry, copy_job, veeam_client)
+                )
 
             if check_api_feature_availability(api_version, "models.copy_job_enable_action"):
-                copy_job_buttons.append(VeeamCopyJobEnableButton(coordinator, entry, copy_job, veeam_client))
+                copy_job_buttons.append(
+                    VeeamCopyJobEnableButton(coordinator, entry, copy_job, veeam_client)
+                )
 
             if check_api_feature_availability(api_version, "models.copy_job_disable_action"):
-                copy_job_buttons.append(VeeamCopyJobDisableButton(coordinator, entry, copy_job, veeam_client))
+                copy_job_buttons.append(
+                    VeeamCopyJobDisableButton(coordinator, entry, copy_job, veeam_client)
+                )
 
             new_entities.extend(copy_job_buttons)
             added_copy_job_ids.add(copy_job_id)
@@ -118,7 +126,9 @@ async def async_setup_entry(
             )
 
         # Create synchronize button for each repository
-        if check_api_feature_availability(api_version, "models.backup_repository_start_synchronize_action"):
+        if check_api_feature_availability(
+            api_version, "models.backup_repository_start_synchronize_action"
+        ):
             for repository in coordinator.data.get("repositories", []):
                 repo_id = repository.get("id")
                 if not repo_id or repo_id in added_repository_ids:
@@ -139,7 +149,9 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
         # Remove stale button entities
-        _remove_stale_button_entities(hass, entry, added_repository_ids, added_job_ids, added_copy_job_ids)
+        _remove_stale_button_entities(
+            hass, entry, added_repository_ids, added_job_ids, added_copy_job_ids
+        )
 
     def _remove_stale_button_entities(
         hass: HomeAssistant,
@@ -162,7 +174,9 @@ async def async_setup_entry(
             job.get("id") for job in coordinator.data.get("jobs", []) if job.get("id")
         }
         current_copy_jobs_in_data = {
-            copy_job.get("id") for copy_job in coordinator.data.get("copy_jobs", []) if copy_job.get("id")
+            copy_job.get("id")
+            for copy_job in coordinator.data.get("copy_jobs", [])
+            if copy_job.get("id")
         }
 
         # Find stale repository buttons
@@ -178,7 +192,11 @@ async def async_setup_entry(
         stale_job_ids = current_job_ids - current_jobs_in_data
         for job_id in stale_job_ids:
             for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
-                if entity.unique_id and f"job_{job_id}" in entity.unique_id and f"copy_job_{job_id}" not in entity.unique_id:
+                if (
+                    entity.unique_id
+                    and f"job_{job_id}" in entity.unique_id
+                    and f"copy_job_{job_id}" not in entity.unique_id
+                ):
                     _LOGGER.info("Removing stale job button: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_job_ids.discard(job_id)
@@ -257,25 +275,34 @@ class VeeamRepositoryRescanButton(CoordinatorEntity, ButtonEntity):
                 # Import the body model for the synchronize request
                 models_module = await asyncio.to_thread(
                     importlib.import_module,
-                    f"veeam_365.{api_module}.models.backup_repository_start_synchronize_action",
+                    f"veeam_365.{api_module}.models."
+                    f"backup_repository_start_synchronize_action",
                 )
-                BackupRepositoryStartSynchronizeAction = models_module.BackupRepositoryStartSynchronizeAction
+                BackupRepositoryStartSynchronizeAction = (
+                    models_module.BackupRepositoryStartSynchronizeAction
+                )
                 body = BackupRepositoryStartSynchronizeAction()
             except (ImportError, AttributeError) as e:
                 _LOGGER.error(
-                    "Failed to import BackupRepositoryStartSynchronizeAction: %s. Cannot synchronize repository.", e
+                    "Failed to import BackupRepositoryStartSynchronizeAction: %s. "
+                    "Cannot synchronize repository.",
+                    e,
                 )
                 return
 
             # Call the synchronize endpoint using VeeamClient
             try:
-                repositories_api = await asyncio.to_thread(self._veeam_client.api, "backup_repository")
+                repositories_api = await asyncio.to_thread(
+                    self._veeam_client.api, "backup_repository"
+                )
                 await self._veeam_client.call(
                     repositories_api.backup_repository_start_synchronize,
                     id=self._repo_id,
                     body=body,
                 )
-                _LOGGER.info("Successfully triggered synchronize for repository: %s", self._repo_name)
+                _LOGGER.info(
+                    "Successfully triggered synchronize for repository: %s", self._repo_name
+                )
                 # Request coordinator update to refresh repository state
                 await self.coordinator.async_request_refresh()
             except Exception as call_err:
@@ -613,7 +640,8 @@ class VeeamCopyJobButtonBase(CoordinatorEntity, ButtonEntity):
         """Import a spec model from the veeam_365 library.
 
         Args:
-            spec_name: Name of the spec model (e.g., 'copy_job_start_action', 'copy_job_stop_action')
+            spec_name: Name of the spec model
+                (e.g., 'copy_job_start_action', 'copy_job_stop_action')
 
         Returns:
             The spec model class
