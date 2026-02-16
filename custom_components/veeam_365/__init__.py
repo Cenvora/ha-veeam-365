@@ -360,83 +360,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Total repositories added to coordinator data: %d", len(repositories_list)
             )
 
-            # Fetch Scale-Out Backup Repositories (SOBRs)
-            sobr_list = []
-            try:
-                sobr_api = await asyncio.to_thread(veeam_client.api, "repositories")
-                sobr_result = await veeam_client.call(sobr_api.get_all_scale_out_repositories)
-
-                if sobr_result:
-                    sobr_data = sobr_result.data if sobr_result else []
-                    _LOGGER.debug("Fetched %d scale-out repositories from API", len(sobr_data))
-
-                    for sobr in sobr_data:
-                        try:
-                            sobr_dict = {
-                                "id": get_uuid_value(sobr.id),
-                                "name": sobr.name or "Unknown",
-                                "description": sobr.description or "",
-                                "unique_id": (
-                                    sobr.unique_id if sobr.unique_id is not UNSET else None
-                                ),
-                            }
-
-                            # Extract performance tier extents
-                            if hasattr(sobr, "performance_tier") and sobr.performance_tier:
-                                extents = []
-                                if (
-                                    hasattr(sobr.performance_tier, "performance_extents")
-                                    and sobr.performance_tier.performance_extents
-                                ):
-                                    for extent in sobr.performance_tier.performance_extents:
-                                        extent_dict = {
-                                            "id": get_uuid_value(extent.id),
-                                            "name": extent.name or "Unknown",
-                                            "status": (
-                                                [s.value for s in extent.status]
-                                                if extent.status is not UNSET
-                                                else []
-                                            ),
-                                        }
-                                        extents.append(extent_dict)
-                                sobr_dict["extents"] = extents
-
-                            # Add all additional properties from the API response
-                            if hasattr(sobr, "additional_properties"):
-                                for key, value in sobr.additional_properties.items():
-                                    sobr_dict[key] = serialize_value(value)
-
-                            sobr_list.append(sobr_dict)
-                            _LOGGER.debug(
-                                "Successfully parsed SOBR: %s (id: %s, extents: %d)",
-                                sobr_dict.get("name"),
-                                sobr_dict.get("id"),
-                                len(sobr_dict.get("extents", [])),
-                            )
-                        except (AttributeError, TypeError) as err:
-                            _LOGGER.warning(
-                                "Failed to parse SOBR %s: %s",
-                                getattr(sobr, "name", "Unknown"),
-                                err,
-                            )
-                            continue
-            except (AttributeError, KeyError, TypeError) as err:
-                _LOGGER.warning("Failed to parse scale-out repositories: %s", err)
-            except Exception as err:
-                _LOGGER.warning("Failed to fetch scale-out repositories: %s", err)
-
-            _LOGGER.debug("Total SOBRs added to coordinator data: %d", len(sobr_list))
-
             # Update diagnostic values - successful poll
             health_ok = True
             last_successful_poll = dt_util.now()
 
             return {
                 "jobs": jobs_list,
-                "server_info": server_info,
                 "license_info": license_info,
                 "repositories": repositories_list,
-                "sobrs": sobr_list,
                 "diagnostics": {
                     "connected": connected,
                     "health_ok": health_ok,

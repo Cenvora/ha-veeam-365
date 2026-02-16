@@ -31,7 +31,6 @@ async def async_setup_entry(
 
     added_job_ids: set[str] = set()
     added_repository_ids: set[str] = set()
-    added_sobr_ids: set[str] = set()
     server_added = False
     license_added = False
 
@@ -109,50 +108,6 @@ async def async_setup_entry(
                     repo_id,
                 )
 
-        # ---- SOBR SENSORS (dynamic) - Each SOBR becomes a device with multiple sensors ----
-        # SOBR data comes from repositories API, only create if available
-        if check_api_feature_availability(api_version, "api.repositories"):
-            for sobr in coordinator.data.get("sobrs", []):
-                sobr_id = sobr.get("id")
-                if not sobr_id or sobr_id in added_sobr_ids:
-                    continue
-
-                # Create sensors for each SOBR attribute
-                new_entities.extend(
-                    [
-                        VeeamSOBRDescriptionSensor(coordinator, entry, sobr),
-                        VeeamSOBRExtentCountSensor(coordinator, entry, sobr),
-                    ]
-                )
-                added_sobr_ids.add(sobr_id)
-                _LOGGER.debug(
-                    "Adding SOBR sensors for: %s (id: %s)",
-                    sobr.get("name"),
-                    sobr_id,
-                )
-
-        # ---- SERVER SENSORS (once) - Server info becomes a device with multiple sensors ----
-        # Server data comes from service API, only create if available
-        if (
-            not server_added
-            and coordinator.data.get("server_info")
-            and check_api_feature_availability(api_version, "api.service")
-        ):
-            new_entities.extend(
-                [
-                    VeeamServerBuildVersionSensor(coordinator, entry),
-                    VeeamServerNameSensor(coordinator, entry),
-                    VeeamServerPlatformSensor(coordinator, entry),
-                    VeeamServerDatabaseVendorSensor(coordinator, entry),
-                    VeeamServerSQLEditionSensor(coordinator, entry),
-                    VeeamServerSQLVersionSensor(coordinator, entry),
-                    VeeamServerHealthOkSensor(coordinator, entry),
-                    VeeamServerLastSuccessfulPollSensor(coordinator, entry),
-                    VeeamServerConnectedSensor(coordinator, entry),
-                ]
-            )
-            server_added = True
-
         # ---- LICENSE SENSORS (once) - License becomes a device with multiple sensors ----
         # License data comes from license_ API, only create if available
         if (
@@ -179,17 +134,16 @@ async def async_setup_entry(
             _LOGGER.debug("Adding %d Veeam sensors", len(new_entities))
             async_add_entities(new_entities)
 
-        # Remove stale entities (jobs/repos/sobrs that no longer exist)
-        _remove_stale_entities(hass, entry, added_job_ids, added_repository_ids, added_sobr_ids)
+        # Remove stale entities (jobs/repos that no longer exist)
+        _remove_stale_entities(hass, entry, added_job_ids, added_repository_ids)
 
     def _remove_stale_entities(
         hass: HomeAssistant,
         entry: ConfigEntry,
         current_job_ids: set[str],
         current_repo_ids: set[str],
-        current_sobr_ids: set[str],
     ) -> None:
-        """Remove entities for jobs/repos/sobrs that no longer exist."""
+        """Remove entities for jobs/repos that no longer exist."""
         if not coordinator.data:
             return
 
@@ -201,9 +155,6 @@ async def async_setup_entry(
         }
         current_repos_in_data = {
             repo.get("id") for repo in coordinator.data.get("repositories", []) if repo.get("id")
-        }
-        current_sobrs_in_data = {
-            sobr.get("id") for sobr in coordinator.data.get("sobrs", []) if sobr.get("id")
         }
 
         # Find stale job entities
@@ -224,15 +175,6 @@ async def async_setup_entry(
                     _LOGGER.info("Removing stale repository entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_repo_ids.discard(repo_id)
-
-        # Find stale SOBR entities
-        stale_sobr_ids = current_sobr_ids - current_sobrs_in_data
-        for sobr_id in stale_sobr_ids:
-            for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
-                if entity.unique_id and f"sobr_{sobr_id}" in entity.unique_id:
-                    _LOGGER.info("Removing stale SOBR entity: %s", entity.entity_id)
-                    entity_reg.async_remove(entity.entity_id)
-            current_sobr_ids.discard(sobr_id)
 
     # First attempt (after first refresh already ran)
     _sync_entities()
@@ -941,8 +883,6 @@ class VeeamRepositoryTypeSensor(VeeamRepositoryBaseSensor):
             return "mdi:microsoft-windows"
         if "cloud" in repo_type or "azure" in repo_type or "aws" in repo_type:
             return "mdi:cloud"
-        if "scale" in repo_type or "sobr" in repo_type:
-            return "mdi:server-plus"
         return "mdi:database"
 
 
@@ -1273,88 +1213,3 @@ class VeeamRepositoryCapacityCriticalSensor(VeeamRepositoryBinarySensorBase):
     @property
     def icon(self) -> str:
         return "mdi:alert-circle" if self.is_on else "mdi:check-circle"
-
-
-# ===========================
-# SOBR SENSORS (device per SOBR)
-# ===========================
-
-
-class VeeamSOBRMixin:
-    """Mixin providing shared SOBR-related functionality."""
-
-    def __init__(self, coordinator, config_entry, sobr_data):
-        """Initialize the mixin."""
-        self._config_entry = config_entry
-        self._sobr_id = sobr_data.get("id")
-        self._sobr_name = sobr_data.get("name", "Unknown SOBR")
-
-    def _sobr(self) -> dict[str, Any] | None:
-        """Get SOBR data from coordinator."""
-        if not self.coordinator.data:
-            return None
-        for sobr in self.coordinator.data.get("sobrs", []):
-            if sobr.get("id") == self._sobr_id:
-                return sobr
-        return None
-
-    @property
-    def device_info(self):
-        """Return device info for this SOBR."""
-        return {
-            "identifiers": {(DOMAIN, f"sobr_{self._sobr_id}")},
-            "name": f"{self._sobr_name}",
-            "manufacturer": "Veeam",
-            "model": "Scale-Out Backup Repository",
-        }
-
-
-class VeeamSOBRBaseSensor(VeeamSOBRMixin, CoordinatorEntity, SensorEntity):
-    """Base class for Veeam SOBR sensors."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator, config_entry, sobr_data):
-        CoordinatorEntity.__init__(self, coordinator)
-        VeeamSOBRMixin.__init__(self, coordinator, config_entry, sobr_data)
-
-
-class VeeamSOBRDescriptionSensor(VeeamSOBRBaseSensor):
-    """Sensor for Veeam SOBR Description."""
-
-    def __init__(self, coordinator, config_entry, sobr_data):
-        super().__init__(coordinator, config_entry, sobr_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_sobr_{self._sobr_id}_description"
-        self._attr_name = "Description"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        sobr = self._sobr()
-        return sobr.get("description", "") if sobr else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:information"
-
-
-class VeeamSOBRExtentCountSensor(VeeamSOBRBaseSensor):
-    """Sensor for Veeam SOBR Extent Count."""
-
-    def __init__(self, coordinator, config_entry, sobr_data):
-        super().__init__(coordinator, config_entry, sobr_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_sobr_{self._sobr_id}_extent_count"
-        self._attr_name = "Extent Count"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> int | None:
-        sobr = self._sobr()
-        if not sobr:
-            return None
-        extents = sobr.get("extents", [])
-        return len(extents)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:counter"
