@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await veeam_client.connect()
 
             # Get backup jobs using the veeam-365 library
+            # Note: Pass method reference (not call) to veeam_client.call()
             jobs_response = await veeam_client.call(
                 veeam_client.api("backup_job").backup_job_get_jobs
             )
