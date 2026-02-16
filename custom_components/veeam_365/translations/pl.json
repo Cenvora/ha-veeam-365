@@ -11,6 +11,14 @@
           "password": "Hasło",
           "verify_ssl": "Weryfikuj certyfikat SSL",
           "api_version": "Wersja API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port (default: 4443)",
+          "username": "Username with administrator privileges",
+          "password": "Password for the specified user account",
+          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
+          "api_version": "Veeam REST API version to use"
         }
       },
       "reauth_confirm": {
@@ -19,6 +27,10 @@
         "data": {
           "username": "Nazwa użytkownika",
           "password": "Hasło"
+        },
+        "data_description": {
+          "username": "Administrator username",
+          "password": "User password"
         }
       },
       "reconfigure": {
@@ -31,6 +43,13 @@
           "password": "Hasło",
           "verify_ssl": "Weryfikuj certyfikat SSL",
           "api_version": "Wersja API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
         }
       }
     },
@@ -42,7 +61,10 @@
     "abort": {
       "already_configured": "Ten serwer Veeam jest już skonfigurowany",
       "reauth_successful": "Ponowne uwierzytelnienie powiodło się",
-      "reconfigure_successful": "Rekonfiguracja powiodła się"
+      "reconfigure_successful": "Rekonfiguracja powiodła się",
+      "cannot_connect": "Nie udało się połączyć z serwerem Veeam",
+      "invalid_auth": "Nieprawidłowe dane uwierzytelniające",
+      "unknown": "Wystąpił nieoczekiwany błąd"
     }
   }
 }

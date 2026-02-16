@@ -11,6 +11,14 @@
           "password": "Heslo",
           "verify_ssl": "Ověřit certifikát SSL",
           "api_version": "Verze API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port (default: 4443)",
+          "username": "Username with administrator privileges",
+          "password": "Password for the specified user account",
+          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
+          "api_version": "Veeam REST API version to use"
         }
       },
       "reauth_confirm": {
@@ -19,6 +27,10 @@
         "data": {
           "username": "Uživatelské jméno",
           "password": "Heslo"
+        },
+        "data_description": {
+          "username": "Administrator username",
+          "password": "User password"
         }
       },
       "reconfigure": {
@@ -31,6 +43,13 @@
           "password": "Heslo",
           "verify_ssl": "Ověřit certifikát SSL",
           "api_version": "Verze API"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
         }
       }
     },
@@ -42,7 +61,10 @@
     "abort": {
       "already_configured": "Tento server Veeam je již nakonfigurován",
       "reauth_successful": "Opětovné ověření bylo úspěšné",
-      "reconfigure_successful": "Překonfigurace byla úspěšná"
+      "reconfigure_successful": "Překonfigurace byla úspěšná",
+      "cannot_connect": "Nepodařilo se připojit k serveru Veeam",
+      "invalid_auth": "Neplatné přihlašovací údaje",
+      "unknown": "Došlo k neočekávané chybě"
     }
   }
 }
