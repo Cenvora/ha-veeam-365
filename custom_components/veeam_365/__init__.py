@@ -102,12 +102,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 ),
                                 "last_run": job.last_run if hasattr(job, "last_run") else None,
                                 "next_run": job.next_run if hasattr(job, "next_run") else None,
-                                "is_enabled": job.is_enabled if hasattr(job, "is_enabled") else None,
+                                "is_enabled": (
+                                    job.is_enabled if hasattr(job, "is_enabled") else None
+                                ),
                                 "total_objects": (
                                     job.total_objects if hasattr(job, "total_objects") else None
                                 ),
                                 "processed_objects": (
-                                    job.processed_objects if hasattr(job, "processed_objects") else None
+                                    job.processed_objects
+                                    if hasattr(job, "processed_objects")
+                                    else None
                                 ),
                             }
                         )
@@ -119,25 +123,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 license_response = await veeam_client.call(veeam_client.api("license").license_get)
                 if license_response:
                     data["license"] = {
-                        "license_id": str(license_response.license_id) if hasattr(license_response, "license_id") else None,
-                        "status": str(license_response.status) if hasattr(license_response, "status") else None,
-                        "type": str(license_response.type) if hasattr(license_response, "type") else None,
-                        "expiration_date": license_response.license_expires if hasattr(license_response, "license_expires") else None,
-                        "licensed_to": license_response.licensed_to if hasattr(license_response, "licensed_to") else None,
-                        "total_users": license_response.total_number if hasattr(license_response, "total_number") else None,
-                        "used_users": license_response.used_number if hasattr(license_response, "used_number") else None,
-                        "new_users": license_response.new_number if hasattr(license_response, "new_number") else None,
+                        "license_id": (
+                            str(license_response.license_id)
+                            if hasattr(license_response, "license_id")
+                            else None
+                        ),
+                        "status": (
+                            str(license_response.status)
+                            if hasattr(license_response, "status")
+                            else None
+                        ),
+                        "type": (
+                            str(license_response.type)
+                            if hasattr(license_response, "type")
+                            else None
+                        ),
+                        "expiration_date": (
+                            license_response.license_expires
+                            if hasattr(license_response, "license_expires")
+                            else None
+                        ),
+                        "licensed_to": (
+                            license_response.licensed_to
+                            if hasattr(license_response, "licensed_to")
+                            else None
+                        ),
+                        "total_users": (
+                            license_response.total_number
+                            if hasattr(license_response, "total_number")
+                            else None
+                        ),
+                        "used_users": (
+                            license_response.used_number
+                            if hasattr(license_response, "used_number")
+                            else None
+                        ),
+                        "new_users": (
+                            license_response.new_number
+                            if hasattr(license_response, "new_number")
+                            else None
+                        ),
                     }
             except Exception as err:
                 _LOGGER.warning("Failed to fetch license: %s", err)
 
             # Get server information
             try:
-                server_response = await veeam_client.call(veeam_client.api("service").service_get_version)
+                server_response = await veeam_client.call(
+                    veeam_client.api("service").service_get_version
+                )
                 if server_response:
                     data["server"] = {
-                        "version": str(server_response.version) if hasattr(server_response, "version") else None,
-                        "build": str(server_response.build) if hasattr(server_response, "build") else None,
+                        "version": (
+                            str(server_response.version)
+                            if hasattr(server_response, "version")
+                            else None
+                        ),
+                        "build": (
+                            str(server_response.build)
+                            if hasattr(server_response, "build")
+                            else None
+                        ),
                     }
             except Exception as err:
                 _LOGGER.warning("Failed to fetch server info: %s", err)

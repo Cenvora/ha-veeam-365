@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -29,23 +29,27 @@ async def async_setup_entry(
 
     # Create sensors
     entities = []
-    
+
     if coordinator.data:
         # Create license sensors
         if coordinator.data.get("license"):
-            entities.extend([
-                VeeamLicenseStatusSensor(coordinator, entry),
-                VeeamLicenseTypeSensor(coordinator, entry),
-                VeeamLicenseExpirationSensor(coordinator, entry),
-                VeeamLicenseUsageSensor(coordinator, entry),
-            ])
-        
+            entities.extend(
+                [
+                    VeeamLicenseStatusSensor(coordinator, entry),
+                    VeeamLicenseTypeSensor(coordinator, entry),
+                    VeeamLicenseExpirationSensor(coordinator, entry),
+                    VeeamLicenseUsageSensor(coordinator, entry),
+                ]
+            )
+
         # Create server sensors
         if coordinator.data.get("server"):
-            entities.extend([
-                VeeamServerVersionSensor(coordinator, entry),
-            ])
-        
+            entities.extend(
+                [
+                    VeeamServerVersionSensor(coordinator, entry),
+                ]
+            )
+
         # Create sensors for each backup job (each job gets its own device)
         for job in coordinator.data.get("jobs", []):
             entities.append(VeeamJobSensor(coordinator, entry, job))
