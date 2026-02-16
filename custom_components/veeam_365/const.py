@@ -123,9 +123,14 @@ API_FEATURE_REQUIREMENTS = {
     # Button features
     "job_start_button": "models.job_start_action",
     "job_stop_button": "models.job_stop_action",
-    "job_enable_button": "api.job_enable_action",  # Uses enable_job endpoint
-    "job_disable_button": "api.job_disable_action",  # Uses disable_job endpoint
-    "repository_start_sync_button": "models.backup_repository_start_synchronize_action",
+    "job_retry_button": "models.job_retry_action",
+    "job_enable_button": "models.job_enable_action",
+    "job_disable_button": "models.job_disable_action",
+    "copy_job_start_button": "models.copy_job_start_action",
+    "copy_job_stop_button": "models.copy_job_stop_action",
+    "copy_job_enable_button": "models.copy_job_enable_action",
+    "copy_job_disable_button": "models.copy_job_disable_action",
+    "repository_synchronize_button": "models.backup_repository_start_synchronize_action",
     # Data sources (for sensors)
     "jobs_data": "api.job",
     "copy_jobs_data": "api.copy_job",
