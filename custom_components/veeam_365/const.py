@@ -121,14 +121,13 @@ def check_api_feature_availability(api_version: str, feature_path: str) -> bool:
 # in button.py and sensor.py via check_api_feature_availability() calls.
 API_FEATURE_REQUIREMENTS = {
     # Button features
-    "job_start_button": "models.job_start_spec",
-    "job_stop_button": "models.job_stop_spec",
-    "job_retry_button": "models.job_retry_spec",
-    "job_enable_button": "api.jobs",  # Uses enable_job endpoint
-    "job_disable_button": "api.jobs",  # Uses disable_job endpoint
-    "repository_rescan_button": "models.repositories_rescan_spec",
+    "job_start_button": "models.job_start_action",
+    "job_stop_button": "models.job_stop_action",
+    "job_enable_button": "api.job_enable_action",  # Uses enable_job endpoint
+    "job_disable_button": "api.job_disable_action",  # Uses disable_job endpoint
+    "repository_start_sync_button": "models.backup_repository_start_synchronize_action",
     # Data sources (for sensors)
-    "jobs_data": "api.jobs",
-    "repositories_data": "api.repositories",
+    "jobs_data": "api.job",
+    "repositories_data": "api.backup_repository",
     "license_data": "api.license_",
 }
