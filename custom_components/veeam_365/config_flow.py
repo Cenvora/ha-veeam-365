@@ -12,9 +12,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 import voluptuous as vol
 
@@ -110,11 +117,19 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show the form
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): cv.string,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
-                vol.Required(CONF_USERNAME): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
-                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
+                vol.Required(CONF_HOST): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): NumberSelector(
+                    NumberSelectorConfig(min=1, max=65535, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Required(CONF_USERNAME): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_PASSWORD): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): BooleanSelector(),
                 vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): SelectSelector(
                     SelectSelectorConfig(
                         options=list(API_VERSIONS.keys()),
@@ -158,8 +173,12 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show form with username and password
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_PASSWORD): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
             }
         )
 
@@ -190,14 +209,24 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show form with all configuration options
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): cv.string,
-                vol.Required(CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)): cv.port,
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
+                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Required(
+                    CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)
+                ): NumberSelector(
+                    NumberSelectorConfig(min=1, max=65535, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_PASSWORD): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
                 vol.Optional(
                     CONF_VERIFY_SSL,
                     default=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                ): cv.boolean,
+                ): BooleanSelector(),
                 vol.Optional(
                     CONF_API_VERSION,
                     default=entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
