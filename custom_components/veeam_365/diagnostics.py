@@ -7,87 +7,87 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_VERIFY_SSL
-
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator = entry.runtime_data.coordinator
+    coordinator = entry.runtime_data["coordinator"]
 
-    # Gather diagnostic information
+    # Get the coordinator data
+    data = coordinator.data if coordinator.data else {}
+
+    # Build diagnostics data
     diagnostics_data = {
         "entry": {
-            "title": entry.title,
-            "domain": entry.domain,
+            "entry_id": entry.entry_id,
             "version": entry.version,
-        },
-        "config": {
-            "host": entry.data.get("host"),
-            "port": entry.data.get("port"),
-            "username": entry.data.get("username"),
-            "verify_ssl": entry.data.get(CONF_VERIFY_SSL),
+            "domain": entry.domain,
+            "title": entry.title,
+            "unique_id": entry.unique_id,
         },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
-            "last_exception": (
-                str(coordinator.last_exception) if coordinator.last_exception else None
+            "last_update_success_time": (
+                coordinator.last_update_success_time.isoformat()
+                if coordinator.last_update_success_time
+                else None
             ),
-            "update_interval": str(coordinator.update_interval),
         },
-        # coordinator.data may be a dict with a "jobs" key or a flat list of jobs
-        "jobs_count": (
-            len(
-                coordinator.data.get("jobs")
-                if isinstance(coordinator.data, dict)
-                else coordinator.data
-            )
-            if coordinator.data
-            else 0
-        ),
+        "data": {
+            "jobs_count": len(data.get("jobs", [])),
+            "repositories_count": len(data.get("repositories", [])),
+            "sobrs_count": len(data.get("sobrs", [])),
+            "has_server_info": data.get("server_info") is not None,
+            "has_license_info": data.get("license_info") is not None,
+        },
     }
 
-    # Add sanitized job information
-    if coordinator.data:
-        # Support both the new dict structure and the legacy flat list structure
-        jobs = (
-            coordinator.data.get("jobs") if isinstance(coordinator.data, dict) else coordinator.data
-        )
-        if jobs:
-            jobs_info = []
-            for job in jobs:
-                # Ensure we only process dict-like job entries
-                if not isinstance(job, dict):
-                    continue
-                jobs_info.append(
-                    {
-                        "id": job.get("id"),
-                        "name": job.get("name"),
-                        "status": job.get("status"),
-                        "backup_type": job.get("backup_type"),
-                        "is_enabled": job.get("is_enabled"),
-                        "total_objects": job.get("total_objects"),
-                        "processed_objects": job.get("processed_objects"),
-                    }
-                )
-            diagnostics_data["jobs"] = jobs_info
+    # Add server info (without sensitive data)
+    if data.get("server_info"):
+        server_info = data["server_info"]
+        diagnostics_data["server"] = {
+            "build_version": server_info.get("build_version"),
+            "platform": server_info.get("platform"),
+            "database_vendor": server_info.get("database_vendor"),
+            "sql_server_edition": server_info.get("sql_server_edition"),
+        }
 
-        # Add license information if available
-        if isinstance(coordinator.data, dict):
-            license_data = coordinator.data.get("license")
-            if license_data:
-                diagnostics_data["license"] = {
-                    "license_id": license_data.get("license_id"),
-                    "status": license_data.get("status"),
-                    "type": license_data.get("type"),
-                    "support_id": license_data.get("support_id"),
-                    "licensed_to": license_data.get("licensed_to"),
-                    "license_expires": (
-                        str(license_data.get("license_expires"))
-                        if license_data.get("license_expires")
-                        else None
-                    ),
-                }
+    # Add license info (without sensitive data)
+    if data.get("license_info"):
+        license_info = data["license_info"]
+        diagnostics_data["license"] = {
+            "status": license_info.get("status"),
+            "edition": license_info.get("edition"),
+            "type": license_info.get("type"),
+        }
+
+    # Add job summaries (without sensitive details)
+    if data.get("jobs"):
+        jobs_summary = {}
+        for job in data["jobs"]:
+            status = job.get("status", "unknown")
+            jobs_summary[status] = jobs_summary.get(status, 0) + 1
+        diagnostics_data["jobs_summary"] = jobs_summary
+
+    # Add repository summaries (without sensitive details)
+    if data.get("repositories"):
+        repos_summary = {}
+        for repo in data["repositories"]:
+            repo_type = repo.get("type", "unknown")
+            repos_summary[repo_type] = repos_summary.get(repo_type, 0) + 1
+        diagnostics_data["repositories_summary"] = repos_summary
+
+    # Add diagnostics info
+    if data.get("diagnostics"):
+        diagnostics_data["integration_diagnostics"] = {
+            "connected": data["diagnostics"].get("connected"),
+            "health_ok": data["diagnostics"].get("health_ok"),
+            "last_successful_poll": (
+                data["diagnostics"]["last_successful_poll"].isoformat()
+                if data["diagnostics"].get("last_successful_poll")
+                else None
+            ),
+        }
 
     return diagnostics_data

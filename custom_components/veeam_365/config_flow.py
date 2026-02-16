@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv, selector
 import voluptuous as vol
@@ -26,53 +25,59 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
+def _get_api_version_selector_config(
+    preferred_version: str | None = None,
+) -> tuple[list[str], str]:
+    """Get API version options and default for selector."""
+    api_version_options = list(API_VERSIONS.keys())
 
-    Data has the keys from DATA_SCHEMA with values provided by the user.
-    """
-    # Construct base URL
+    if preferred_version and preferred_version in api_version_options:
+        return api_version_options, preferred_version
+
+    if DEFAULT_API_VERSION in api_version_options:
+        return api_version_options, DEFAULT_API_VERSION
+
+    if api_version_options:
+        return api_version_options, api_version_options[0]
+
+    _LOGGER.error("No API versions available, using fallback")
+    return [DEFAULT_API_VERSION], DEFAULT_API_VERSION
+
+
+async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the user input allows us to connect."""
+    api_version = data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
+
+    try:
+        from veeam_365.client import VeeamClient
+    except ImportError as err:
+        _LOGGER.error("Error importing veeam_365: %s", err)
+        raise ConnectionError("Failed to import veeam_365 modules") from err
+
     base_url = f"https://{data[CONF_HOST]}:{data[CONF_PORT]}"
 
-    # Test connection by attempting to authenticate
     try:
 
-        def _test_connection_sync():
-            """Test connection synchronously in executor to avoid blocking imports."""
-            from veeam_365.client import VeeamClient
-
-            client = VeeamClient(
+        async def _test_connection():
+            vc = VeeamClient(
                 host=base_url,
                 username=data[CONF_USERNAME],
                 password=data[CONF_PASSWORD],
+                api_version=api_version,
                 verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                api_version=data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
             )
-            # Run async methods in a new event loop in the executor
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(client.connect())
-                loop.run_until_complete(client.close())
-                return True
-            finally:
-                loop.close()
+            await vc.connect()
+            return vc
 
-        result = await hass.async_add_executor_job(_test_connection_sync)
+        vc = await _test_connection()
 
-        if not result:
+        # Verify connection was successful by attempting to access the client
+        if not vc:
             raise PermissionError("Authentication failed")
 
-    except PermissionError as err:
-        _LOGGER.error("Authentication failed: %s", err)
-        raise
-    except ConnectionError as err:
-        _LOGGER.error("Failed to connect to Veeam server: %s", err)
-        raise
     except Exception as err:
-        _LOGGER.error("Unexpected error during connection test: %s", err)
         raise ConnectionError(f"Failed to connect: {err}") from err
 
-    # Return info that you want to store in the config entry.
     return {"title": f"Veeam 365 ({data[CONF_HOST]})"}
 
 
@@ -81,12 +86,122 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> "Veeam365OptionsFlow":
+        return Veeam365OptionsFlow()
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle reconfiguration of the integration."""
+        errors: dict[str, str] = {}
+        reconf_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            # Merge with existing config data
+            data = {
+                **reconf_entry.data,
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_PORT: user_input[CONF_PORT],
+                CONF_USERNAME: user_input[CONF_USERNAME],
+                CONF_PASSWORD: user_input[CONF_PASSWORD],
+                CONF_VERIFY_SSL: user_input.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            }
+
+            try:
+                await validate_input(self.hass, data)
+            except PermissionError:
+                errors["base"] = "invalid_auth"
+            except ConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    reconf_entry,
+                    data=data,
+                    reason="reconfigure_successful",
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=reconf_entry.data.get(CONF_HOST)): cv.string,
+                    vol.Required(
+                        CONF_PORT, default=reconf_entry.data.get(CONF_PORT, DEFAULT_PORT)
+                    ): cv.port,
+                    vol.Required(
+                        CONF_USERNAME, default=reconf_entry.data.get(CONF_USERNAME)
+                    ): cv.string,
+                    vol.Required(CONF_PASSWORD): cv.string,
+                    vol.Optional(
+                        CONF_VERIFY_SSL,
+                        default=reconf_entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                    ): cv.boolean,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "host": reconf_entry.data.get(CONF_HOST),
+            },
+        )
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Handle reauth upon API authentication error."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm reauth dialog."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            # Merge with existing config data
+            data = {
+                **reauth_entry.data,
+                CONF_USERNAME: user_input[CONF_USERNAME],
+                CONF_PASSWORD: user_input[CONF_PASSWORD],
+            }
+
+            try:
+                await validate_input(self.hass, data)
+            except PermissionError:
+                errors["base"] = "invalid_auth"
+            except ConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reauth")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data=data,
+                    reason="reauth_successful",
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_USERNAME, default=reauth_entry.data.get(CONF_USERNAME)
+                    ): cv.string,
+                    vol.Required(CONF_PASSWORD): cv.string,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "host": reauth_entry.data[CONF_HOST],
+            },
+        )
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Check if already configured
             await self.async_set_unique_id(f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}")
             self._abort_if_unique_id_configured()
 
@@ -96,27 +211,26 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except ConnectionError:
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(title=info["title"], data=user_input)
 
-        # Show the form
+        api_version_options, api_version_default = _get_api_version_selector_config()
+
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): selector.TextSelector(),
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
-                ),
-                vol.Required(CONF_USERNAME): selector.TextSelector(),
-                vol.Required(CONF_PASSWORD): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): selector.BooleanSelector(),
-                vol.Optional(CONF_API_VERSION, default=DEFAULT_API_VERSION): selector.SelectSelector(
+                vol.Required(CONF_HOST): cv.string,
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
+                vol.Required(CONF_USERNAME): cv.string,
+                vol.Required(CONF_PASSWORD): cv.string,
+                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
+                vol.Optional(
+                    CONF_API_VERSION, default=api_version_default
+                ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=list(API_VERSIONS.keys()),
+                        options=api_version_options,
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -125,96 +239,53 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
-        """Handle reauth flow."""
-        return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle reauth confirmation."""
+class Veeam365OptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for Veeam Backup for Microsoft 365 integration."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
 
         if user_input is not None:
-            # Merge with existing data
-            new_data = {**entry.data, **user_input}
+            test_data = {**self.config_entry.data, CONF_API_VERSION: user_input[CONF_API_VERSION]}
 
             try:
-                await validate_input(self.hass, new_data)
+                await validate_input(self.hass, test_data)
             except PermissionError:
                 errors["base"] = "invalid_auth"
             except ConnectionError:
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during reauth")
+            except Exception:
+                _LOGGER.exception("Unexpected exception validating options")
                 errors["base"] = "unknown"
             else:
-                self.hass.config_entries.async_update_entry(entry, data=new_data)
-                await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
+                return self.async_create_entry(title="", data=user_input)
 
-        # Show form with username and password
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): selector.TextSelector(),
-                vol.Required(CONF_PASSWORD): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-            }
+        api_version_options = list(API_VERSIONS.keys())
+
+        current_api_version = self.config_entry.options.get(
+            CONF_API_VERSION,
+            self.config_entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
         )
 
-        return self.async_show_form(
-            step_id="reauth_confirm", data_schema=data_schema, errors=errors
-        )
+        if current_api_version not in api_version_options:
+            _LOGGER.warning(
+                "Stored API version %s is invalid for Veeam Backup for Microsoft 365, falling back to default",
+                current_api_version,
+            )
+            current_api_version = DEFAULT_API_VERSION
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle reconfiguration flow."""
-        errors: dict[str, str] = {}
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-
-        if user_input is not None:
-            try:
-                await validate_input(self.hass, user_input)
-            except PermissionError:
-                errors["base"] = "invalid_auth"
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during reconfigure")
-                errors["base"] = "unknown"
-            else:
-                self.hass.config_entries.async_update_entry(entry, data=user_input)
-                await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="reconfigure_successful")
-
-        # Show form with all configuration options
-        data_schema = vol.Schema(
+        options_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST)): selector.TextSelector(),
                 vol.Required(
-                    CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
-                ),
-                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): selector.TextSelector(),
-                vol.Required(CONF_PASSWORD): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-                vol.Optional(
-                    CONF_VERIFY_SSL,
-                    default=entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                ): selector.BooleanSelector(),
-                vol.Optional(
-                    CONF_API_VERSION,
-                    default=entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
+                    CONF_API_VERSION, default=current_api_version
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=list(API_VERSIONS.keys()),
+                        options=api_version_options,
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
             }
         )
 
-        return self.async_show_form(step_id="reconfigure", data_schema=data_schema, errors=errors)
+        return self.async_show_form(step_id="init", data_schema=options_schema, errors=errors)
