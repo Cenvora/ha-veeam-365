@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "连接到 Veeam Backup for Microsoft 365",
+        "description": "输入您的 Veeam Backup for Microsoft 365 服务器详细信息。",
+        "data": {
+          "host": "主机",
+          "port": "端口",
+          "username": "用户名",
+          "password": "密码",
+          "verify_ssl": "验证 SSL 证书"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到 Veeam 服务器",
+      "invalid_auth": "身份验证凭据无效",
+      "unknown": "发生意外错误"
+    },
+    "abort": {
+      "already_configured": "此 Veeam 服务器已配置"
+    }
+  }
+}

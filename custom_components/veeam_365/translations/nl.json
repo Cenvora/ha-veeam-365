@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Verbinden met Veeam Backup for Microsoft 365",
+        "description": "Voer de details van uw Veeam Backup for Microsoft 365 server in.",
+        "data": {
+          "host": "Host",
+          "port": "Poort",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord",
+          "verify_ssl": "SSL-certificaat verifiëren"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbinding met Veeam-server mislukt",
+      "invalid_auth": "Ongeldige authenticatiegegevens",
+      "unknown": "Er is een onverwachte fout opgetreden"
+    },
+    "abort": {
+      "already_configured": "Deze Veeam-server is al geconfigureerd"
+    }
+  }
+}

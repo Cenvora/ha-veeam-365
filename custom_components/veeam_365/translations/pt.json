@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar ao Veeam Backup for Microsoft 365",
+        "description": "Insira os detalhes do seu servidor Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Host",
+          "port": "Porta",
+          "username": "Nome de usuário",
+          "password": "Senha",
+          "verify_ssl": "Verificar certificado SSL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Falha ao conectar ao servidor Veeam",
+      "invalid_auth": "Credenciais de autenticação inválidas",
+      "unknown": "Ocorreu um erro inesperado"
+    },
+    "abort": {
+      "already_configured": "Este servidor Veeam já está configurado"
+    }
+  }
+}
