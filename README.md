@@ -1,18 +1,18 @@
 <h1 align="center">
 <br>
-<img src="https://raw.githubusercontent.com/Cenvora/veeam-br/main/media/Veeam_logo_2024_RGB_main_20.png"
+<img src="https://raw.githubusercontent.com/Cenvora/ha-veeam-365/main/media/Veeam_logo_2024_RGB_main_20.png"
      alt="Veeam Logo"
      height="100">
 <br>
 <br>
-Veeam Backup & Replication Integration for Home Assistant
+Veeam Backup for Microsoft 365 Integration for Home Assistant
 </h1>
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
-A Home Assistant custom integration that monitors Veeam Backup & Replication servers. This integration provides real-time monitoring of backup jobs and their status directly in Home Assistant. 
+A Home Assistant custom integration that monitors Veeam Backup for Microsoft 365 servers. This integration provides real-time monitoring of backup jobs and their status directly in Home Assistant. 
 
-This project is an independent, open source Python client for the Veeam Backup & Replication <a href="https://helpcenter.veeam.com/references/vbr/13/rest/1.3-rev1/tag/SectionAbout">REST API</a>. It is not affiliated with, endorsed by, or sponsored by Veeam Software.
+This project is an independent, open source Python client for the Veeam Backup for Microsoft 365 <a href="https://helpcenter.veeam.com/references/vbo365/8/rest/tag/SectionAbout">REST API</a>. It is not affiliated with, endorsed by, or sponsored by Veeam Software.
 
 ## Features
 
@@ -25,11 +25,11 @@ This project is an independent, open source Python client for the Veeam Backup &
 ## Requirements
 
 - Home Assistant 2023.1.0 or newer
-- Veeam Backup & Replication server with REST API enabled (Community Edition not supported)
+- Veeam Backup for Microsoft 365 server with REST API enabled (Community Edition not supported)
 
 ## Installation
 
-> **Note**: The required `veeam-br` Python library is automatically installed by Home Assistant when you add this integration. No manual package installation is needed.
+> **Note**: The required `veeam-365` Python library is automatically installed by Home Assistant when you add this integration. No manual package installation is needed.
 
 ### HACS (Recommended)
 
@@ -37,15 +37,15 @@ This project is an independent, open source Python client for the Veeam Backup &
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/Cenvora/ha-veeam-br`
+5. Add this repository URL: `https://github.com/Cenvora/ha-veeam-365`
 6. Select category: "Integration"
 7. Click "Add"
-8. Click "Install" on the Veeam Backup & Replication card
+8. Click "Install" on the Veeam Backup for Microsoft 365 card
 9. Restart Home Assistant
 
 ### Manual Installation
 
-1. Copy the `custom_components/veeam_br` directory to your Home Assistant's `custom_components` directory
+1. Copy the `custom_components/veeam_365` directory to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 
 ## Configuration
@@ -54,10 +54,10 @@ This project is an independent, open source Python client for the Veeam Backup &
 
 1. Go to **Settings** → **Devices & Services**
 2. Click **+ Add Integration**
-3. Search for "Veeam Backup & Replication"
+3. Search for "Veeam Backup for Microsoft 365"
 4. Enter your Veeam server details:
    - **Host**: Your Veeam server hostname or IP address
-   - **Port**: REST API port (default: 9419)
+   - **Port**: REST API port (default: 4443)
    - **Username**: Veeam server username
    - **Password**: Veeam server password
    - **Verify SSL**: Whether to verify SSL certificates (recommended: enabled)
@@ -180,4 +180,4 @@ This project is licensed under the terms included in the LICENSE file.
 
 ## Credits
 
-This integration uses the [veeam-br](https://github.com/Cenvora/veeam-br) Python library for communication with Veeam Backup & Replication servers. The library is automatically installed by Home Assistant when you add this integration - no manual installation required.
+This integration uses the [veeam-365](https://github.com/Cenvora/veeam-365) Python library for communication with Veeam Backup for Microsoft 365 servers. The library is automatically installed by Home Assistant when you add this integration - no manual installation required.
