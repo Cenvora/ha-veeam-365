@@ -127,9 +127,31 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         )
         raise ConnectionError(f"Failed to connect: {type(err).__name__}: {err}") from err
     finally:
-        # Always close the validation client to free up resources
+        # Always logout and close the validation client to free up resources
         if vc is not None:
             try:
+                # Properly logout to revoke the token on the server
+                # This prevents race conditions when async_setup_entry is called
+                # immediately after config flow validation
+                try:
+                    logout_module = await asyncio.to_thread(
+                        __import__,
+                        f"veeam_365.{api_version}.api.auth.logout",
+                        fromlist=["asyncio"],
+                    )
+                    # The logout module has an async function named "asyncio" (library convention)
+                    logout_async_func = getattr(logout_module, "asyncio")
+                    await vc.call(logout_async_func)
+                    _LOGGER.debug("Successfully logged out validation VeeamClient")
+                    # Give server time to process logout before setup creates new session
+                    await asyncio.sleep(1.0)
+                except Exception as logout_err:
+                    _LOGGER.debug(
+                        "Could not logout validation client: %s (type: %s)",
+                        logout_err,
+                        type(logout_err).__name__,
+                    )
+
                 await vc.close()
                 _LOGGER.debug("Closed validation VeeamClient")
             except Exception as err:
