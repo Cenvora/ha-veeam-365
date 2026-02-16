@@ -1,11 +1,11 @@
 {
-  "domain": "veeam_br",
-  "name": "Veeam Backup & Replication",
+  "domain": "veeam_365",
+  "name": "Veeam Backup for Microsoft 365",
   "codeowners": ["@Cenvora"],
   "config_flow": true,
-  "documentation": "https://github.com/Cenvora/ha-veeam-br",
+  "documentation": "https://github.com/Cenvora/ha-veeam-365",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/Cenvora/ha-veeam-br/issues",
-  "requirements": ["veeam-br>=0.1.0,<1.0.0"],
+  "issue_tracker": "https://github.com/Cenvora/ha-veeam-365/issues",
+  "requirements": ["veeam-365>=0.1.0,<1.0.0"],
   "version": "1.0.0"
 }
