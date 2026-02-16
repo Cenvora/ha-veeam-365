@@ -273,8 +273,7 @@ class VeeamRepositoryRescanButton(CoordinatorEntity, ButtonEntity):
                 # Import the body model for the synchronize request
                 models_module = await asyncio.to_thread(
                     importlib.import_module,
-                    f"veeam_365.{api_module}.models."
-                    f"backup_repository_start_synchronize_action",
+                    f"veeam_365.{api_module}.models." f"backup_repository_start_synchronize_action",
                 )
                 BackupRepositoryStartSynchronizeAction = (
                     models_module.BackupRepositoryStartSynchronizeAction
