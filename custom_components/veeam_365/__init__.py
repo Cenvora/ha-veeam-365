@@ -74,8 +74,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             await hass.async_add_executor_job(_connect_sync)
 
-            # Fetch backup jobs
+            # Fetch backup jobs and license
             jobs = []
+            license_data = None
 
             # Get backup jobs
             try:
@@ -119,10 +120,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "Failed to fetch jobs: %s - %s", type(err).__name__, err, exc_info=True
                 )
 
-            # Note: VB365 API v8 does not provide license_ or service modules
-            # License and server data not available in this API version
+            # Get license information
+            try:
+                _LOGGER.debug("Fetching license from API")
+                license_response = await veeam_client.call(veeam_client.api("license_").license_get)
+                _LOGGER.debug("License response received: %s", type(license_response))
+                if license_response:
+                    license_data = {
+                        "license_id": (
+                            str(license_response.license_id)
+                            if hasattr(license_response, "license_id")
+                            and license_response.license_id
+                            else None
+                        ),
+                        "status": (
+                            str(license_response.status)
+                            if hasattr(license_response, "status") and license_response.status
+                            else None
+                        ),
+                        "license_expires": (
+                            license_response.license_expires
+                            if hasattr(license_response, "license_expires")
+                            else None
+                        ),
+                        "type": (
+                            str(license_response.type_)
+                            if hasattr(license_response, "type_") and license_response.type_
+                            else None
+                        ),
+                        "support_id": (
+                            license_response.support_id
+                            if hasattr(license_response, "support_id")
+                            else None
+                        ),
+                        "licensed_to": (
+                            license_response.licensed_to
+                            if hasattr(license_response, "licensed_to")
+                            else None
+                        ),
+                    }
+            except Exception as err:
+                _LOGGER.warning("Failed to fetch license: %s", err)
+                license_data = None
 
-            return jobs
+            return {"jobs": jobs, "license": license_data}
 
         except PermissionError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err

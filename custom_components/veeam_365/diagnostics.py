@@ -52,9 +52,7 @@ async def async_get_config_entry_diagnostics(
     if coordinator.data:
         # Support both the new dict structure and the legacy flat list structure
         jobs = (
-            coordinator.data.get("jobs")
-            if isinstance(coordinator.data, dict)
-            else coordinator.data
+            coordinator.data.get("jobs") if isinstance(coordinator.data, dict) else coordinator.data
         )
         if jobs:
             jobs_info = []
@@ -74,5 +72,22 @@ async def async_get_config_entry_diagnostics(
                     }
                 )
             diagnostics_data["jobs"] = jobs_info
+
+        # Add license information if available
+        if isinstance(coordinator.data, dict):
+            license_data = coordinator.data.get("license")
+            if license_data:
+                diagnostics_data["license"] = {
+                    "license_id": license_data.get("license_id"),
+                    "status": license_data.get("status"),
+                    "type": license_data.get("type"),
+                    "support_id": license_data.get("support_id"),
+                    "licensed_to": license_data.get("licensed_to"),
+                    "license_expires": (
+                        str(license_data.get("license_expires"))
+                        if license_data.get("license_expires")
+                        else None
+                    ),
+                }
 
     return diagnostics_data
