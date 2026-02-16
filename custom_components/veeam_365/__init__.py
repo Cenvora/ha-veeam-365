@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME, Platform
@@ -32,7 +33,7 @@ class VeeamRuntimeData:
     """Runtime data for Veeam integration."""
 
     coordinator: DataUpdateCoordinator
-    veeam_client: any
+    veeam_client: Any
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
