@@ -11,6 +11,25 @@
           "password": "Heslo",
           "verify_ssl": "Ověřit certifikát SSL"
         }
+      },
+      "reauth_confirm": {
+        "title": "Znovu ověřit Veeam Backup for Microsoft 365",
+        "description": "Přihlašovací údaje pro váš server Veeam je třeba aktualizovat.",
+        "data": {
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        }
+      },
+      "reconfigure": {
+        "title": "Překonfigurovat Veeam Backup for Microsoft 365",
+        "description": "Aktualizujte konfiguraci serveru Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Hostitel",
+          "port": "Port",
+          "username": "Uživatelské jméno",
+          "password": "Heslo",
+          "verify_ssl": "Ověřit certifikát SSL"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "Došlo k neočekávané chybě"
     },
     "abort": {
-      "already_configured": "Tento server Veeam je již nakonfigurován"
+      "already_configured": "Tento server Veeam je již nakonfigurován",
+      "reauth_successful": "Opětovné ověření bylo úspěšné",
+      "reconfigure_successful": "Překonfigurace byla úspěšná"
     }
   }
 }

@@ -11,6 +11,25 @@
           "password": "Hasło",
           "verify_ssl": "Weryfikuj certyfikat SSL"
         }
+      },
+      "reauth_confirm": {
+        "title": "Ponownie uwierzytelnij Veeam Backup for Microsoft 365",
+        "description": "Dane uwierzytelniające do serwera Veeam należy zaktualizować.",
+        "data": {
+          "username": "Nazwa użytkownika",
+          "password": "Hasło"
+        }
+      },
+      "reconfigure": {
+        "title": "Rekonfiguruj Veeam Backup for Microsoft 365",
+        "description": "Zaktualizuj konfigurację serwera Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Nazwa użytkownika",
+          "password": "Hasło",
+          "verify_ssl": "Weryfikuj certyfikat SSL"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "Wystąpił nieoczekiwany błąd"
     },
     "abort": {
-      "already_configured": "Ten serwer Veeam jest już skonfigurowany"
+      "already_configured": "Ten serwer Veeam jest już skonfigurowany",
+      "reauth_successful": "Ponowne uwierzytelnienie powiodło się",
+      "reconfigure_successful": "Rekonfiguracja powiodła się"
     }
   }
 }

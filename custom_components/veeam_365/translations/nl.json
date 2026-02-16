@@ -11,6 +11,25 @@
           "password": "Wachtwoord",
           "verify_ssl": "SSL-certificaat verifiëren"
         }
+      },
+      "reauth_confirm": {
+        "title": "Veeam Backup for Microsoft 365 opnieuw authenticeren",
+        "description": "De inloggegevens voor uw Veeam-server moeten worden bijgewerkt.",
+        "data": {
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord"
+        }
+      },
+      "reconfigure": {
+        "title": "Veeam Backup for Microsoft 365 opnieuw configureren",
+        "description": "Werk de configuratie van uw Veeam Backup for Microsoft 365 server bij.",
+        "data": {
+          "host": "Host",
+          "port": "Poort",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord",
+          "verify_ssl": "SSL-certificaat verifiëren"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "Er is een onverwachte fout opgetreden"
     },
     "abort": {
-      "already_configured": "Deze Veeam-server is al geconfigureerd"
+      "already_configured": "Deze Veeam-server is al geconfigureerd",
+      "reauth_successful": "Herauthenticatie geslaagd",
+      "reconfigure_successful": "Herconfiguratie geslaagd"
     }
   }
 }

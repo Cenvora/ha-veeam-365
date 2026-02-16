@@ -11,6 +11,25 @@
           "password": "Пароль",
           "verify_ssl": "Проверить SSL-сертификат"
         }
+      },
+      "reauth_confirm": {
+        "title": "Повторная аутентификация Veeam Backup for Microsoft 365",
+        "description": "Учетные данные для вашего сервера Veeam необходимо обновить.",
+        "data": {
+          "username": "Имя пользователя",
+          "password": "Пароль"
+        }
+      },
+      "reconfigure": {
+        "title": "Перенастроить Veeam Backup for Microsoft 365",
+        "description": "Обновите конфигурацию вашего сервера Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Хост",
+          "port": "Порт",
+          "username": "Имя пользователя",
+          "password": "Пароль",
+          "verify_ssl": "Проверить SSL-сертификат"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "Произошла непредвиденная ошибка"
     },
     "abort": {
-      "already_configured": "Этот сервер Veeam уже настроен"
+      "already_configured": "Этот сервер Veeam уже настроен",
+      "reauth_successful": "Повторная аутентификация прошла успешно",
+      "reconfigure_successful": "Перенастройка прошла успешно"
     }
   }
 }

@@ -11,6 +11,25 @@
           "password": "密码",
           "verify_ssl": "验证 SSL 证书"
         }
+      },
+      "reauth_confirm": {
+        "title": "重新验证 Veeam Backup for Microsoft 365",
+        "description": "您的 Veeam 服务器凭据需要更新。",
+        "data": {
+          "username": "用户名",
+          "password": "密码"
+        }
+      },
+      "reconfigure": {
+        "title": "重新配置 Veeam Backup for Microsoft 365",
+        "description": "更新您的 Veeam Backup for Microsoft 365 服务器配置。",
+        "data": {
+          "host": "主机",
+          "port": "端口",
+          "username": "用户名",
+          "password": "密码",
+          "verify_ssl": "验证 SSL 证书"
+        }
       }
     },
     "error": {
@@ -19,7 +38,9 @@
       "unknown": "发生意外错误"
     },
     "abort": {
-      "already_configured": "此 Veeam 服务器已配置"
+      "already_configured": "此 Veeam 服务器已配置",
+      "reauth_successful": "重新验证成功",
+      "reconfigure_successful": "重新配置成功"
     }
   }
 }
