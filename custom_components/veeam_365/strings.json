@@ -108,18 +108,6 @@
       "server_name": {
         "name": "Server name"
       },
-      "server_platform": {
-        "name": "Platform"
-      },
-      "server_database_vendor": {
-        "name": "Database vendor"
-      },
-      "server_sql_edition": {
-        "name": "SQL Server edition"
-      },
-      "server_sql_version": {
-        "name": "SQL Server version"
-      },
       "server_last_poll": {
         "name": "Last successful poll"
       },
@@ -161,12 +149,6 @@
       },
       "repository_used_space": {
         "name": "Used space"
-      },
-      "sobr_description": {
-        "name": "Description"
-      },
-      "sobr_extent_count": {
-        "name": "Extent count"
       }
     },
     "binary_sensor": {
@@ -178,29 +160,11 @@
       },
       "repository_online": {
         "name": "Online"
-      },
-      "sobr_extent_sealed": {
-        "name": "{extent_name} sealed mode"
-      },
-      "sobr_extent_maintenance": {
-        "name": "{extent_name} maintenance mode"
       }
     },
     "button": {
       "repository_rescan": {
         "name": "Rescan repository"
-      },
-      "sobr_extent_enable_sealed": {
-        "name": "{extent_name} enable sealed mode"
-      },
-      "sobr_extent_disable_sealed": {
-        "name": "{extent_name} disable sealed mode"
-      },
-      "sobr_extent_enable_maintenance": {
-        "name": "{extent_name} enable maintenance mode"
-      },
-      "sobr_extent_disable_maintenance": {
-        "name": "{extent_name} disable maintenance mode"
       },
       "job_start": {
         "name": "Start"
