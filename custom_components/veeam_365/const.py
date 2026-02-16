@@ -99,7 +99,7 @@ def check_api_feature_availability(api_version: str, feature_path: str) -> bool:
 
     Args:
         api_version: The API version to check (e.g., "8")
-        feature_path: The import path to check (e.g., "models.job_start_spec" or "api.jobs")
+        feature_path: The import path to check (e.g., "models.job_start_spec" or "api.job")
 
     Returns:
         bool: True if the feature is available in the API version, False otherwise
@@ -128,6 +128,7 @@ API_FEATURE_REQUIREMENTS = {
     "repository_start_sync_button": "models.backup_repository_start_synchronize_action",
     # Data sources (for sensors)
     "jobs_data": "api.job",
+    "copy_jobs_data": "api.copy_job",
     "repositories_data": "api.backup_repository",
     "license_data": "api.license_",
 }

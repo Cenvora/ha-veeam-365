@@ -53,7 +53,7 @@ async def async_setup_entry(
 
         # ---- JOB SENSORS (dynamic) - Each job becomes a device with multiple sensors ----
         # Jobs data comes from jobs API, only create if available
-        if check_api_feature_availability(api_version, "api.jobs"):
+        if check_api_feature_availability(api_version, "api.job"):
             for job in coordinator.data.get("jobs", []):
                 job_id = job.get("id")
                 if not job_id or job_id in added_job_ids:
@@ -75,7 +75,7 @@ async def async_setup_entry(
 
         # ---- COPY JOB SENSORS (dynamic) - Each copy job becomes a device with multiple sensors ----
         # Copy jobs data comes from copy_jobs API, only create if available
-        if check_api_feature_availability(api_version, "api.copy_jobs"):
+        if check_api_feature_availability(api_version, "api.copy_job"):
             for copy_job in coordinator.data.get("copy_jobs", []):
                 copy_job_id = copy_job.get("id")
                 if not copy_job_id or copy_job_id in added_copy_job_ids:
@@ -95,7 +95,7 @@ async def async_setup_entry(
 
         # ---- REPOSITORY SENSORS (dynamic) - Each repository becomes a device with multiple sensors ----
         # Repository data comes from repositories API, only create if available
-        if check_api_feature_availability(api_version, "api.repositories"):
+        if check_api_feature_availability(api_version, "api.backup_repository"):
             for repository in coordinator.data.get("repositories", []):
                 repo_id = repository.get("id")
                 if not repo_id or repo_id in added_repository_ids:

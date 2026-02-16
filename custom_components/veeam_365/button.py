@@ -71,7 +71,7 @@ async def async_setup_entry(
             if check_api_feature_availability(api_version, "models.job_retry_spec"):
                 job_buttons.append(VeeamJobRetryButton(coordinator, entry, job, veeam_client))
 
-            if check_api_feature_availability(api_version, "api.jobs"):
+            if check_api_feature_availability(api_version, "api.job"):
                 job_buttons.append(VeeamJobEnableButton(coordinator, entry, job, veeam_client))
                 job_buttons.append(VeeamJobDisableButton(coordinator, entry, job, veeam_client))
 
