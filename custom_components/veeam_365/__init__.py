@@ -348,100 +348,98 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Fetch repositories information from /BackupRepositories
             repositories_list = []
             try:
-                repositories_api = getattr(veeam_client, "backup_repository", None)
-                if repositories_api and hasattr(
-                    repositories_api, "backup_repository_get_repositories"
-                ):
-                    _LOGGER.debug("Fetching repositories from /BackupRepositories")
-                    repos_response = await hass.async_add_executor_job(
-                        repositories_api.backup_repository_get_repositories
+                repositories_api = await asyncio.to_thread(veeam_client.api, "backup_repository")
+                repos_response = await veeam_client.call(
+                    repositories_api.backup_repository_get_repositories
+                )
+
+                # Check for API errors
+                if is_api_error(repos_response):
+                    _LOGGER.error(
+                        "Failed to fetch repositories: %s", get_error_message(repos_response)
                     )
+                    repos_response = None
 
-                    if repos_response and hasattr(repos_response, "results"):
-                        for repo_data in repos_response.results:
-                            # Get object storage details
-                            object_storage = getattr(repo_data, "object_storage", None)
-                            is_immutable = False
-                            immutability_days = None
-                            storage_type = "Unknown"
-                            used_space_gb = None
+                if repos_response and hasattr(repos_response, "results"):
+                    for repo_data in repos_response.results:
+                        # Get object storage details
+                        object_storage = getattr(repo_data, "object_storage", None)
+                        is_immutable = False
+                        immutability_days = None
+                        storage_type = "Unknown"
+                        used_space_gb = None
 
-                            if object_storage:
-                                # Check for Unset on enable_immutability
-                                enable_immutability_attr = getattr(
-                                    object_storage, "enable_immutability", False
-                                )
-                                if (
-                                    hasattr(enable_immutability_attr, "__class__")
-                                    and enable_immutability_attr.__class__.__name__ == "Unset"
-                                ):
-                                    is_immutable = False
-                                else:
-                                    is_immutable = bool(enable_immutability_attr)
-
-                                # Get immutability days
-                                immutability_days_attr = getattr(
-                                    object_storage, "immutability_period_days", None
-                                )
-                                if immutability_days_attr is not None and not (
-                                    hasattr(immutability_days_attr, "__class__")
-                                    and immutability_days_attr.__class__.__name__ == "Unset"
-                                ):
-                                    immutability_days = immutability_days_attr
-
-                                # Get storage type from enum
-                                type_attr = getattr(object_storage, "type_", None)
-                                if type_attr and hasattr(type_attr, "value"):
-                                    storage_type = type_attr.value
-                                elif type_attr:
-                                    storage_type = str(type_attr)
-
-                                # Get used space from object storage (in bytes)
-                                used_bytes_attr = getattr(object_storage, "used_space_bytes", None)
-                                if used_bytes_attr is not None and not (
-                                    hasattr(used_bytes_attr, "__class__")
-                                    and used_bytes_attr.__class__.__name__ == "Unset"
-                                ):
-                                    used_space_gb = round(used_bytes_attr / (1024**3), 2)
-
-                            # Get retention type from enum
-                            retention_type_attr = getattr(repo_data, "retention_type", None)
-                            retention_type = "Unknown"
-                            if retention_type_attr and hasattr(retention_type_attr, "value"):
-                                retention_type = retention_type_attr.value
-                            elif retention_type_attr:
-                                retention_type = str(retention_type_attr)
-
-                            repositories_list.append(
-                                {
-                                    "id": str(getattr(repo_data, "id", "")),
-                                    "name": getattr(repo_data, "name", "Unknown Repository"),
-                                    "description": getattr(repo_data, "description", ""),
-                                    "path": getattr(repo_data, "path", ""),
-                                    "type": storage_type,
-                                    "retention_type": retention_type,
-                                    "used_space_gb": used_space_gb,
-                                    "is_long_term": getattr(repo_data, "is_long_term", False)
-                                    or False,
-                                    "is_outdated": getattr(repo_data, "is_outdated", False)
-                                    or False,
-                                    "is_out_of_sync": getattr(repo_data, "is_out_of_sync", False)
-                                    or False,
-                                    "is_indexed": getattr(repo_data, "is_indexed", False) or False,
-                                    "is_out_of_order": getattr(repo_data, "is_out_of_order", False)
-                                    or False,
-                                    "is_immutable": is_immutable,
-                                    "immutability_days": immutability_days,
-                                    # Derived status fields for binary sensors
-                                    "is_online": not getattr(repo_data, "is_out_of_sync", False),
-                                    "is_out_of_date": getattr(repo_data, "is_outdated", False)
-                                    or False,
-                                    "is_accessible": not getattr(
-                                        repo_data, "is_out_of_order", False
-                                    ),
-                                }
+                        if object_storage:
+                            # Check for Unset on enable_immutability
+                            enable_immutability_attr = getattr(
+                                object_storage, "enable_immutability", False
                             )
-                        _LOGGER.debug("Fetched %d repositories", len(repositories_list))
+                            if (
+                                hasattr(enable_immutability_attr, "__class__")
+                                and enable_immutability_attr.__class__.__name__ == "Unset"
+                            ):
+                                is_immutable = False
+                            else:
+                                is_immutable = bool(enable_immutability_attr)
+
+                            # Get immutability days
+                            immutability_days_attr = getattr(
+                                object_storage, "immutability_period_days", None
+                            )
+                            if immutability_days_attr is not None and not (
+                                hasattr(immutability_days_attr, "__class__")
+                                and immutability_days_attr.__class__.__name__ == "Unset"
+                            ):
+                                immutability_days = immutability_days_attr
+
+                            # Get storage type from enum
+                            type_attr = getattr(object_storage, "type_", None)
+                            if type_attr and hasattr(type_attr, "value"):
+                                storage_type = type_attr.value
+                            elif type_attr:
+                                storage_type = str(type_attr)
+
+                            # Get used space from object storage (in bytes)
+                            used_bytes_attr = getattr(object_storage, "used_space_bytes", None)
+                            if used_bytes_attr is not None and not (
+                                hasattr(used_bytes_attr, "__class__")
+                                and used_bytes_attr.__class__.__name__ == "Unset"
+                            ):
+                                used_space_gb = round(used_bytes_attr / (1024**3), 2)
+
+                        # Get retention type from enum
+                        retention_type_attr = getattr(repo_data, "retention_type", None)
+                        retention_type = "Unknown"
+                        if retention_type_attr and hasattr(retention_type_attr, "value"):
+                            retention_type = retention_type_attr.value
+                        elif retention_type_attr:
+                            retention_type = str(retention_type_attr)
+
+                        repositories_list.append(
+                            {
+                                "id": str(getattr(repo_data, "id", "")),
+                                "name": getattr(repo_data, "name", "Unknown Repository"),
+                                "description": getattr(repo_data, "description", ""),
+                                "path": getattr(repo_data, "path", ""),
+                                "type": storage_type,
+                                "retention_type": retention_type,
+                                "used_space_gb": used_space_gb,
+                                "is_long_term": getattr(repo_data, "is_long_term", False) or False,
+                                "is_outdated": getattr(repo_data, "is_outdated", False) or False,
+                                "is_out_of_sync": getattr(repo_data, "is_out_of_sync", False)
+                                or False,
+                                "is_indexed": getattr(repo_data, "is_indexed", False) or False,
+                                "is_out_of_order": getattr(repo_data, "is_out_of_order", False)
+                                or False,
+                                "is_immutable": is_immutable,
+                                "immutability_days": immutability_days,
+                                # Derived status fields for binary sensors
+                                "is_online": not getattr(repo_data, "is_out_of_sync", False),
+                                "is_out_of_date": getattr(repo_data, "is_outdated", False) or False,
+                                "is_accessible": not getattr(repo_data, "is_out_of_order", False),
+                            }
+                        )
+                    _LOGGER.debug("Fetched %d repositories", len(repositories_list))
             except (AttributeError, KeyError, TypeError) as err:
                 _LOGGER.warning("Failed to parse repositories info: %s", err)
             except Exception as err:
