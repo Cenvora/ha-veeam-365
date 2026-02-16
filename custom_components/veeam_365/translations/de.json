@@ -66,5 +66,24 @@
       "invalid_auth": "Ungültige Anmeldedaten",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Veeam Backup for Microsoft 365 Optionen",
+        "description": "Konfigurieren Sie die Einstellungen der Veeam Backup for Microsoft 365 Integration.",
+        "data": {
+          "api_version": "API-Version"
+        },
+        "data_description": {
+          "api_version": "Wählen Sie die Veeam REST API-Version für diese Integration"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Veeam Backup for Microsoft 365 Server fehlgeschlagen",
+      "invalid_auth": "Ungültige Anmeldedaten",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten"
+    }
   }
 }

@@ -87,11 +87,11 @@
   },
   "entity": {
     "sensor": {
-      "job_status": {
-        "name": "Status"
+      "job_name": {
+        "name": "Name"
       },
-      "job_type": {
-        "name": "Type"
+      "job_backup_type": {
+        "name": "Backup type"
       },
       "job_last_run": {
         "name": "Last run"
@@ -99,23 +99,41 @@
       "job_next_run": {
         "name": "Next run"
       },
-      "job_last_result": {
-        "name": "Last result"
+      "job_last_backup": {
+        "name": "Last backup"
       },
-      "server_build_version": {
-        "name": "Build version"
+      "job_is_enabled": {
+        "name": "Enabled"
       },
-      "server_name": {
-        "name": "Server name"
+      "job_last_status": {
+        "name": "Last status"
       },
-      "server_last_poll": {
+      "copy_job_name": {
+        "name": "Name"
+      },
+      "copy_job_last_run": {
+        "name": "Last run"
+      },
+      "copy_job_last_backup": {
+        "name": "Last backup"
+      },
+      "copy_job_is_enabled": {
+        "name": "Enabled"
+      },
+      "copy_job_last_status": {
+        "name": "Last status"
+      },
+      "server_version": {
+        "name": "Product version"
+      },
+      "server_installation_id": {
+        "name": "Installation ID"
+      },
+      "server_last_successful_poll": {
         "name": "Last successful poll"
       },
       "license_status": {
         "name": "Status"
-      },
-      "license_edition": {
-        "name": "Edition"
       },
       "license_type": {
         "name": "Type"
@@ -123,32 +141,35 @@
       "license_expiration": {
         "name": "Expiration date"
       },
-      "license_support_expiration": {
-        "name": "Support expiration date"
+      "license_grace_period_expires": {
+        "name": "Grace period expiration"
       },
       "license_licensed_to": {
         "name": "Licensed to"
       },
-      "license_support_id": {
-        "name": "Support ID"
+      "license_total_number": {
+        "name": "Total licenses"
+      },
+      "license_used_number": {
+        "name": "Used licenses"
+      },
+      "license_new_number": {
+        "name": "New licenses"
       },
       "license_auto_update": {
         "name": "Auto update enabled"
       },
-      "license_cloud_connect": {
-        "name": "Cloud Connect license"
-      },
       "repository_type": {
         "name": "Type"
       },
-      "repository_capacity": {
-        "name": "Capacity"
-      },
-      "repository_free_space": {
-        "name": "Free space"
+      "repository_description": {
+        "name": "Description"
       },
       "repository_used_space": {
         "name": "Used space"
+      },
+      "repository_immutability_days": {
+        "name": "Immutability days"
       }
     },
     "binary_sensor": {
@@ -160,6 +181,15 @@
       },
       "repository_online": {
         "name": "Online"
+      },
+      "repository_out_of_date": {
+        "name": "Out of date"
+      },
+      "repository_immutable": {
+        "name": "Immutable"
+      },
+      "repository_accessible": {
+        "name": "Accessible"
       }
     },
     "button": {

@@ -30,6 +30,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data["coordinator"]
 
     added_job_ids: set[str] = set()
+    added_copy_job_ids: set[str] = set()
     added_repository_ids: set[str] = set()
     server_added = False
     license_added = False
@@ -61,14 +62,36 @@ async def async_setup_entry(
                 # Create sensors for each job attribute
                 new_entities.extend(
                     [
-                        VeeamJobStatusSensor(coordinator, entry, job),
+                        VeeamJobNameSensor(coordinator, entry, job),
                         VeeamJobTypeSensor(coordinator, entry, job),
                         VeeamJobLastRunSensor(coordinator, entry, job),
                         VeeamJobNextRunSensor(coordinator, entry, job),
-                        VeeamJobLastResultSensor(coordinator, entry, job),
+                        VeeamJobLastBackupSensor(coordinator, entry, job),
+                        VeeamJobEnabledSensor(coordinator, entry, job),
+                        VeeamJobLastStatusSensor(coordinator, entry, job),
                     ]
                 )
                 added_job_ids.add(job_id)
+
+        # ---- COPY JOB SENSORS (dynamic) - Each copy job becomes a device with multiple sensors ----
+        # Copy jobs data comes from copy_jobs API, only create if available
+        if check_api_feature_availability(api_version, "api.copy_jobs"):
+            for copy_job in coordinator.data.get("copy_jobs", []):
+                copy_job_id = copy_job.get("id")
+                if not copy_job_id or copy_job_id in added_copy_job_ids:
+                    continue
+
+                # Create sensors for each copy job attribute
+                new_entities.extend(
+                    [
+                        VeeamCopyJobNameSensor(coordinator, entry, copy_job),
+                        VeeamCopyJobLastRunSensor(coordinator, entry, copy_job),
+                        VeeamCopyJobLastBackupSensor(coordinator, entry, copy_job),
+                        VeeamCopyJobEnabledSensor(coordinator, entry, copy_job),
+                        VeeamCopyJobLastStatusSensor(coordinator, entry, copy_job),
+                    ]
+                )
+                added_copy_job_ids.add(copy_job_id)
 
         # ---- REPOSITORY SENSORS (dynamic) - Each repository becomes a device with multiple sensors ----
         # Repository data comes from repositories API, only create if available
@@ -83,21 +106,19 @@ async def async_setup_entry(
                     [
                         VeeamRepositoryTypeSensor(coordinator, entry, repository),
                         VeeamRepositoryDescriptionSensor(coordinator, entry, repository),
-                        VeeamRepositoryCapacitySensor(coordinator, entry, repository),
-                        VeeamRepositoryFreeSpaceSensor(coordinator, entry, repository),
                         VeeamRepositoryUsedSpaceSensor(coordinator, entry, repository),
-                        VeeamRepositoryUsedSpacePercentSensor(coordinator, entry, repository),
                         VeeamRepositoryOnlineStatusSensor(coordinator, entry, repository),
                         VeeamRepositoryOutOfDateSensor(coordinator, entry, repository),
                         VeeamRepositoryImmutableSensor(coordinator, entry, repository),
                         VeeamRepositoryAccessibleSensor(coordinator, entry, repository),
-                        VeeamRepositoryCapacityWarningSensor(coordinator, entry, repository),
-                        VeeamRepositoryCapacityCriticalSensor(coordinator, entry, repository),
                     ]
                 )
 
-                # Add immutability days sensor only if immutability is enabled
-                if repository.get("is_immutable") and repository.get("immutability_days"):
+                # Add immutability days sensor only if immutability is enabled and has days set
+                if (
+                    repository.get("is_immutable")
+                    and repository.get("immutability_days") is not None
+                ):
                     new_entities.append(
                         VeeamRepositoryImmutabilityDaysSensor(coordinator, entry, repository)
                     )
@@ -107,6 +128,20 @@ async def async_setup_entry(
                     repository.get("name"),
                     repo_id,
                 )
+
+        # ---- SERVER SENSORS (once) - Server device with diagnostic and version sensors ----
+        # Server info comes from ServiceInstance endpoint and diagnostics
+        if not server_added and coordinator.data:
+            new_entities.extend(
+                [
+                    VeeamServerVersionSensor(coordinator, entry),
+                    VeeamServerInstallationIDSensor(coordinator, entry),
+                    VeeamServerLastSuccessfulPollSensor(coordinator, entry),
+                    VeeamServerHealthOkSensor(coordinator, entry),
+                    VeeamServerConnectedSensor(coordinator, entry),
+                ]
+            )
+            server_added = True
 
         # ---- LICENSE SENSORS (once) - License becomes a device with multiple sensors ----
         # License data comes from license_ API, only create if available
@@ -118,14 +153,14 @@ async def async_setup_entry(
             new_entities.extend(
                 [
                     VeeamLicenseStatusSensor(coordinator, entry),
-                    VeeamLicenseEditionSensor(coordinator, entry),
                     VeeamLicenseTypeSensor(coordinator, entry),
                     VeeamLicenseExpirationSensor(coordinator, entry),
-                    VeeamLicenseSupportExpirationSensor(coordinator, entry),
+                    VeeamLicenseGracePeriodExpirationSensor(coordinator, entry),
                     VeeamLicenseLicensedToSensor(coordinator, entry),
-                    VeeamLicenseSupportIDSensor(coordinator, entry),
+                    VeeamLicenseTotalNumberSensor(coordinator, entry),
+                    VeeamLicenseUsedNumberSensor(coordinator, entry),
+                    VeeamLicenseNewNumberSensor(coordinator, entry),
                     VeeamLicenseAutoUpdateSensor(coordinator, entry),
-                    VeeamLicenseCloudConnectSensor(coordinator, entry),
                 ]
             )
             license_added = True
@@ -135,15 +170,16 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
         # Remove stale entities (jobs/repos that no longer exist)
-        _remove_stale_entities(hass, entry, added_job_ids, added_repository_ids)
+        _remove_stale_entities(hass, entry, added_job_ids, added_copy_job_ids, added_repository_ids)
 
     def _remove_stale_entities(
         hass: HomeAssistant,
         entry: ConfigEntry,
         current_job_ids: set[str],
+        current_copy_job_ids: set[str],
         current_repo_ids: set[str],
     ) -> None:
-        """Remove entities for jobs/repos that no longer exist."""
+        """Remove entities for jobs/copy jobs/repos that no longer exist."""
         if not coordinator.data:
             return
 
@@ -152,6 +188,11 @@ async def async_setup_entry(
         # Get current IDs from coordinator data
         current_jobs_in_data = {
             job.get("id") for job in coordinator.data.get("jobs", []) if job.get("id")
+        }
+        current_copy_jobs_in_data = {
+            copy_job.get("id")
+            for copy_job in coordinator.data.get("copy_jobs", [])
+            if copy_job.get("id")
         }
         current_repos_in_data = {
             repo.get("id") for repo in coordinator.data.get("repositories", []) if repo.get("id")
@@ -166,6 +207,15 @@ async def async_setup_entry(
                     _LOGGER.info("Removing stale job entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_job_ids.discard(job_id)
+
+        # Find stale copy job entities
+        stale_copy_job_ids = current_copy_job_ids - current_copy_jobs_in_data
+        for copy_job_id in stale_copy_job_ids:
+            for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
+                if entity.unique_id and f"copy_job_{copy_job_id}" in entity.unique_id:
+                    _LOGGER.info("Removing stale copy job entity: %s", entity.entity_id)
+                    entity_reg.async_remove(entity.entity_id)
+            current_copy_job_ids.discard(copy_job_id)
 
         # Find stale repository entities
         stale_repo_ids = current_repo_ids - current_repos_in_data
@@ -274,52 +324,38 @@ class VeeamJobBaseSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class VeeamJobStatusSensor(VeeamJobBaseSensor):
-    """Sensor for Veeam Job Status."""
+class VeeamJobNameSensor(VeeamJobBaseSensor):
+    """Sensor for Veeam Job Name."""
 
     def __init__(self, coordinator, config_entry, job_data):
         super().__init__(coordinator, config_entry, job_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_status"
-        self._attr_name = "Status"
-
-    @property
-    def native_value(self) -> str | None:
-        job = self._job()
-        if not job:
-            return None
-        status = job.get("status", "").lower()
-        if status in ("running", "starting"):
-            return "running"
-        last_result = job.get("last_result", "").lower()
-        return last_result if last_result else "unknown"
-
-    @property
-    def icon(self) -> str:
-        state = self.native_value
-        if state == "running":
-            return "mdi:backup-restore"
-        if state == "success":
-            return "mdi:check-circle"
-        if state == "warning":
-            return "mdi:alert"
-        if state == "failed":
-            return "mdi:close-circle"
-        return "mdi:cloud-sync"
-
-
-class VeeamJobTypeSensor(VeeamJobBaseSensor):
-    """Sensor for Veeam Job Type."""
-
-    def __init__(self, coordinator, config_entry, job_data):
-        super().__init__(coordinator, config_entry, job_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_type"
-        self._attr_name = "Type"
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_name"
+        self._attr_name = "Name"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> str | None:
         job = self._job()
-        return job.get("type") if job else None
+        return job.get("name") if job else None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:label"
+
+
+class VeeamJobTypeSensor(VeeamJobBaseSensor):
+    """Sensor for Veeam Job Backup Type."""
+
+    def __init__(self, coordinator, config_entry, job_data):
+        super().__init__(coordinator, config_entry, job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_backup_type"
+        self._attr_name = "Backup Type"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        job = self._job()
+        return job.get("backup_type") if job else None
 
     @property
     def icon(self) -> str:
@@ -364,13 +400,32 @@ class VeeamJobNextRunSensor(VeeamJobBaseSensor):
         return "mdi:clock-end"
 
 
-class VeeamJobLastResultSensor(VeeamJobBaseSensor):
-    """Sensor for Veeam Job Last Result."""
+class VeeamJobLastBackupSensor(VeeamJobBaseSensor):
+    """Sensor for Veeam Job Last Backup."""
 
     def __init__(self, coordinator, config_entry, job_data):
         super().__init__(coordinator, config_entry, job_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_last_result"
-        self._attr_name = "Last Result"
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_last_backup"
+        self._attr_name = "Last Backup"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def native_value(self):
+        job = self._job()
+        return job.get("last_backup") if job else None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:backup-restore"
+
+
+class VeeamJobEnabledSensor(VeeamJobBaseSensor):
+    """Sensor for Veeam Job Enabled Status."""
+
+    def __init__(self, coordinator, config_entry, job_data):
+        super().__init__(coordinator, config_entry, job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_is_enabled"
+        self._attr_name = "Enabled"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -378,28 +433,201 @@ class VeeamJobLastResultSensor(VeeamJobBaseSensor):
         job = self._job()
         if not job:
             return None
-        last_result = job.get("last_result", "").lower()
-        return last_result if last_result else "unknown"
+        is_enabled = job.get("is_enabled")
+        return "Yes" if is_enabled else "No"
+
+    @property
+    def icon(self) -> str:
+        job = self._job()
+        if job and job.get("is_enabled"):
+            return "mdi:play-circle"
+        return "mdi:pause-circle"
+
+
+class VeeamJobLastStatusSensor(VeeamJobBaseSensor):
+    """Sensor for Veeam Job Last Status."""
+
+    def __init__(self, coordinator, config_entry, job_data):
+        super().__init__(coordinator, config_entry, job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_last_status"
+        self._attr_name = "Last Status"
+
+    @property
+    def native_value(self) -> str | None:
+        job = self._job()
+        return job.get("last_status") if job else None
 
     @property
     def icon(self) -> str:
         state = self.native_value
-        if state == "success":
+        if not state:
+            return "mdi:cloud-sync"
+        state_lower = str(state).lower()
+        if state_lower == "success":
             return "mdi:check-circle"
-        if state == "warning":
+        if state_lower == "warning":
             return "mdi:alert"
-        if state == "failed":
+        if state_lower == "failed":
             return "mdi:close-circle"
-        return "mdi:help-circle"
+        if state_lower == "running":
+            return "mdi:play"
+        return "mdi:cloud-sync"
 
 
 # ===========================
-# SERVER INFO SENSORS (single device)
+# COPY JOB SENSORS (device per copy job)
+# ===========================
+
+
+class VeeamCopyJobBaseSensor(CoordinatorEntity, SensorEntity):
+    """Base class for Veeam Copy Job sensors."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+        self._copy_job_id = copy_job_data.get("id")
+        self._copy_job_name = copy_job_data.get("name", "Unknown Copy Job")
+
+    def _copy_job(self) -> dict[str, Any] | None:
+        if not self.coordinator.data:
+            return None
+        for copy_job in self.coordinator.data.get("copy_jobs", []):
+            if copy_job.get("id") == self._copy_job_id:
+                return copy_job
+        return None
+
+    @property
+    def device_info(self):
+        """Return device info for this copy job."""
+        return {
+            "identifiers": {(DOMAIN, f"copy_job_{self._copy_job_id}")},
+            "name": f"{self._copy_job_name}",
+            "manufacturer": "Veeam",
+            "model": "Backup Copy Job",
+        }
+
+
+class VeeamCopyJobNameSensor(VeeamCopyJobBaseSensor):
+    """Sensor for Veeam Copy Job Name."""
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator, config_entry, copy_job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_copy_job_{self._copy_job_id}_name"
+        self._attr_name = "Name"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        copy_job = self._copy_job()
+        return copy_job.get("name") if copy_job else None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:label"
+
+
+class VeeamCopyJobLastRunSensor(VeeamCopyJobBaseSensor):
+    """Sensor for Veeam Copy Job Last Run."""
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator, config_entry, copy_job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_copy_job_{self._copy_job_id}_last_run"
+        self._attr_name = "Last Run"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def native_value(self):
+        copy_job = self._copy_job()
+        return copy_job.get("last_run") if copy_job else None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:clock-start"
+
+
+class VeeamCopyJobLastBackupSensor(VeeamCopyJobBaseSensor):
+    """Sensor for Veeam Copy Job Last Backup."""
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator, config_entry, copy_job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_copy_job_{self._copy_job_id}_last_backup"
+        self._attr_name = "Last Backup"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def native_value(self):
+        copy_job = self._copy_job()
+        return copy_job.get("last_backup") if copy_job else None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:backup-restore"
+
+
+class VeeamCopyJobEnabledSensor(VeeamCopyJobBaseSensor):
+    """Sensor for Veeam Copy Job Enabled Status."""
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator, config_entry, copy_job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_copy_job_{self._copy_job_id}_is_enabled"
+        self._attr_name = "Enabled"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str | None:
+        copy_job = self._copy_job()
+        if not copy_job:
+            return None
+        is_enabled = copy_job.get("is_enabled")
+        return "Yes" if is_enabled else "No"
+
+    @property
+    def icon(self) -> str:
+        copy_job = self._copy_job()
+        if copy_job and copy_job.get("is_enabled"):
+            return "mdi:play-circle"
+        return "mdi:pause-circle"
+
+
+class VeeamCopyJobLastStatusSensor(VeeamCopyJobBaseSensor):
+    """Sensor for Veeam Copy Job Last Status."""
+
+    def __init__(self, coordinator, config_entry, copy_job_data):
+        super().__init__(coordinator, config_entry, copy_job_data)
+        self._attr_unique_id = f"{config_entry.entry_id}_copy_job_{self._copy_job_id}_last_status"
+        self._attr_name = "Last Status"
+
+    @property
+    def native_value(self) -> str | None:
+        copy_job = self._copy_job()
+        return copy_job.get("last_status") if copy_job else None
+
+    @property
+    def icon(self) -> str:
+        state = self.native_value
+        if not state:
+            return "mdi:cloud-sync"
+        state_lower = str(state).lower()
+        if state_lower == "success":
+            return "mdi:check-circle"
+        if state_lower == "warning":
+            return "mdi:alert"
+        if state_lower == "failed":
+            return "mdi:close-circle"
+        if state_lower == "running":
+            return "mdi:play"
+        return "mdi:cloud-sync"
+
+
+# ===========================
+# SERVER SENSORS (single device)
 # ===========================
 
 
 class VeeamServerBaseSensor(CoordinatorEntity, SensorEntity):
-    """Base class for Veeam Server Info sensors."""
+    """Base class for Veeam Server sensors."""
 
     _attr_has_entity_name = True
 
@@ -413,128 +641,50 @@ class VeeamServerBaseSensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self):
         """Return device info for the Veeam server."""
-        server_info = self._server_info()
-        server_name = server_info.get("name", "Unknown") if server_info else "Unknown"
         return {
             "identifiers": {(DOMAIN, f"server_{self._config_entry.entry_id}")},
-            "name": f"{server_name}",
+            "name": "Veeam Server",
             "manufacturer": "Veeam",
-            "model": "Backup & Replication Server",
+            "model": "Backup for Microsoft 365",
         }
 
 
-class VeeamServerBuildVersionSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server Build Version."""
+class VeeamServerVersionSensor(VeeamServerBaseSensor):
+    """Sensor for Veeam Server Product Version."""
 
     def __init__(self, coordinator, config_entry):
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_build_version"
-        self._attr_name = "Build Version"
+        self._attr_unique_id = f"{config_entry.entry_id}_server_version"
+        self._attr_name = "Product Version"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> str | None:
         server_info = self._server_info()
-        return server_info.get("build_version") if server_info else None
+        return server_info.get("version") if server_info else None
 
     @property
     def icon(self) -> str:
         return "mdi:tag"
 
 
-class VeeamServerNameSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server Name."""
+class VeeamServerInstallationIDSensor(VeeamServerBaseSensor):
+    """Sensor for Veeam Server Installation ID."""
 
     def __init__(self, coordinator, config_entry):
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_name"
-        self._attr_name = "Server Name"
+        self._attr_unique_id = f"{config_entry.entry_id}_server_installation_id"
+        self._attr_name = "Installation ID"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> str | None:
         server_info = self._server_info()
-        return server_info.get("name") if server_info else None
+        return server_info.get("installation_id") if server_info else None
 
     @property
     def icon(self) -> str:
-        return "mdi:server"
-
-
-class VeeamServerPlatformSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server Platform."""
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_platform"
-        self._attr_name = "Platform"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        server_info = self._server_info()
-        return server_info.get("platform") if server_info else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:desktop-tower"
-
-
-class VeeamServerDatabaseVendorSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server Database Vendor."""
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_database_vendor"
-        self._attr_name = "Database Vendor"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        server_info = self._server_info()
-        return server_info.get("database_vendor") if server_info else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:database"
-
-
-class VeeamServerSQLEditionSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server SQL Edition."""
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_sql_edition"
-        self._attr_name = "SQL Server Edition"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        server_info = self._server_info()
-        return server_info.get("sql_server_edition") if server_info else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:database-settings"
-
-
-class VeeamServerSQLVersionSensor(VeeamServerBaseSensor):
-    """Sensor for Veeam Server SQL Version."""
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_sql_version"
-        self._attr_name = "SQL Server Version"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        server_info = self._server_info()
-        return server_info.get("sql_server_version") if server_info else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:database-check"
+        return "mdi:identifier"
 
 
 class VeeamServerLastSuccessfulPollSensor(VeeamServerBaseSensor):
@@ -568,19 +718,14 @@ class VeeamServerBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
 
-    def _server_info(self) -> dict[str, Any] | None:
-        return self.coordinator.data.get("server_info") if self.coordinator.data else None
-
     @property
     def device_info(self):
         """Return device info for the Veeam server."""
-        server_info = self._server_info()
-        server_name = server_info.get("name", "Unknown") if server_info else "Unknown"
         return {
             "identifiers": {(DOMAIN, f"server_{self._config_entry.entry_id}")},
-            "name": f"{server_name}",
+            "name": "Veeam Server",
             "manufacturer": "Veeam",
-            "model": "Backup & Replication Server",
+            "model": "Backup for Microsoft 365",
         }
 
 
@@ -664,25 +809,6 @@ class VeeamLicenseStatusSensor(VeeamLicenseBaseSensor):
         return "mdi:license"
 
 
-class VeeamLicenseEditionSensor(VeeamLicenseBaseSensor):
-    """Sensor for Veeam License Edition."""
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_license_edition"
-        self._attr_name = "Edition"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def native_value(self) -> str | None:
-        license_info = self._license_info()
-        return license_info.get("edition") if license_info else None
-
-    @property
-    def icon(self) -> str:
-        return "mdi:certificate"
-
-
 class VeeamLicenseTypeSensor(VeeamLicenseBaseSensor):
     """Sensor for Veeam License Type."""
 
@@ -721,19 +847,19 @@ class VeeamLicenseExpirationSensor(VeeamLicenseBaseSensor):
         return "mdi:calendar-end"
 
 
-class VeeamLicenseSupportExpirationSensor(VeeamLicenseBaseSensor):
-    """Sensor for Veeam License Support Expiration Date."""
+class VeeamLicenseGracePeriodExpirationSensor(VeeamLicenseBaseSensor):
+    """Sensor for Veeam License Grace Period Expiration Date."""
 
     def __init__(self, coordinator, config_entry):
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_license_support_expiration"
-        self._attr_name = "Support Expiration Date"
+        self._attr_unique_id = f"{config_entry.entry_id}_license_grace_period_expires"
+        self._attr_name = "Grace Period Expiration"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
 
     @property
     def native_value(self):
         license_info = self._license_info()
-        return license_info.get("support_expiration_date") if license_info else None
+        return license_info.get("grace_period_expires") if license_info else None
 
     @property
     def icon(self) -> str:
@@ -759,23 +885,70 @@ class VeeamLicenseLicensedToSensor(VeeamLicenseBaseSensor):
         return "mdi:account"
 
 
-class VeeamLicenseSupportIDSensor(VeeamLicenseBaseSensor):
-    """Sensor for Veeam License Support ID."""
+class VeeamLicenseTotalNumberSensor(VeeamLicenseBaseSensor):
+    """Sensor for Veeam License Total Number."""
 
     def __init__(self, coordinator, config_entry):
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_license_support_id"
-        self._attr_name = "Support ID"
+        self._attr_unique_id = f"{config_entry.entry_id}_license_total_number"
+        self._attr_name = "Total Licenses"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> int | None:
         license_info = self._license_info()
-        return license_info.get("support_id") if license_info else None
+        if not license_info:
+            return None
+        return license_info.get("total_number")
 
     @property
     def icon(self) -> str:
-        return "mdi:identifier"
+        return "mdi:counter"
+
+
+class VeeamLicenseUsedNumberSensor(VeeamLicenseBaseSensor):
+    """Sensor for Veeam License Used Number."""
+
+    def __init__(self, coordinator, config_entry):
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_license_used_number"
+        self._attr_name = "Used Licenses"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> int | None:
+        license_info = self._license_info()
+        if not license_info:
+            return None
+        return license_info.get("used_number")
+
+    @property
+    def icon(self) -> str:
+        return "mdi:account-multiple-check"
+
+
+class VeeamLicenseNewNumberSensor(VeeamLicenseBaseSensor):
+    """Sensor for Veeam License New Number."""
+
+    def __init__(self, coordinator, config_entry):
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_license_new_number"
+        self._attr_name = "New Licenses"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> int | None:
+        license_info = self._license_info()
+        if not license_info:
+            return None
+        return license_info.get("new_number")
+
+    @property
+    def icon(self) -> str:
+        return "mdi:account-multiple-plus"
 
 
 class VeeamLicenseBinarySensorBase(VeeamLicenseMixin, CoordinatorEntity, BinarySensorEntity):
@@ -812,33 +985,6 @@ class VeeamLicenseAutoUpdateSensor(VeeamLicenseBinarySensorBase):
     @property
     def icon(self) -> str:
         return "mdi:update"
-
-
-class VeeamLicenseCloudConnectSensor(VeeamLicenseBinarySensorBase):
-    """Binary sensor for Veeam License Cloud Connect."""
-
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_license_cloud_connect"
-        self._attr_name = "Cloud Connect Enabled"
-
-    @property
-    def is_on(self) -> bool | None:
-        license_info = self._license_info()
-        if not license_info:
-            return None
-        cloud_connect = license_info.get("cloud_connect")
-        if cloud_connect is None:
-            return None
-        # cloud_connect is an enum string (e.g., "Enabled", "Disabled"), not a boolean
-        return str(cloud_connect).lower() == "enabled"
-
-    @property
-    def icon(self) -> str:
-        return "mdi:cloud-check" if self.is_on else "mdi:cloud-off"
 
 
 # ===========================
@@ -905,54 +1051,6 @@ class VeeamRepositoryDescriptionSensor(VeeamRepositoryBaseSensor):
         return "mdi:text"
 
 
-class VeeamRepositoryCapacitySensor(VeeamRepositoryBaseSensor):
-    """Sensor for Veeam Repository Total Capacity."""
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_capacity"
-        self._attr_name = "Capacity"
-        self._attr_native_unit_of_measurement = "GB"
-        self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_suggested_display_precision = 2
-
-    @property
-    def native_value(self) -> float | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        return repo.get("capacity_gb")
-
-    @property
-    def icon(self) -> str:
-        return "mdi:harddisk"
-
-
-class VeeamRepositoryFreeSpaceSensor(VeeamRepositoryBaseSensor):
-    """Sensor for Veeam Repository Free Space."""
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_free_space"
-        self._attr_name = "Free Space"
-        self._attr_native_unit_of_measurement = "GB"
-        self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_suggested_display_precision = 2
-
-    @property
-    def native_value(self) -> float | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        return repo.get("free_gb")
-
-    @property
-    def icon(self) -> str:
-        return "mdi:database-check"
-
-
 class VeeamRepositoryUsedSpaceSensor(VeeamRepositoryBaseSensor):
     """Sensor for Veeam Repository Used Space."""
 
@@ -977,42 +1075,6 @@ class VeeamRepositoryUsedSpaceSensor(VeeamRepositoryBaseSensor):
         return "mdi:database-alert"
 
 
-class VeeamRepositoryUsedSpacePercentSensor(VeeamRepositoryBaseSensor):
-    """Sensor for Veeam Repository Used Space Percentage."""
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = (
-            f"{config_entry.entry_id}_repository_{self._repo_id}_used_space_percent"
-        )
-        self._attr_name = "Used Percentage"
-        self._attr_native_unit_of_measurement = "%"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_suggested_display_precision = 1
-
-    @property
-    def native_value(self) -> float | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        capacity = repo.get("capacity_gb")
-        used = repo.get("used_space_gb")
-        if capacity and capacity > 0 and used is not None:
-            return round((used / capacity) * 100, 1)
-        return None
-
-    @property
-    def icon(self) -> str:
-        value = self.native_value
-        if value is None:
-            return "mdi:percent"
-        if value >= 90:
-            return "mdi:alert-circle"
-        if value >= 75:
-            return "mdi:alert"
-        return "mdi:chart-arc"
-
-
 class VeeamRepositoryBinarySensorBase(VeeamRepositoryMixin, CoordinatorEntity, BinarySensorEntity):
     """Base class for Veeam Repository binary sensors."""
 
@@ -1021,22 +1083,6 @@ class VeeamRepositoryBinarySensorBase(VeeamRepositoryMixin, CoordinatorEntity, B
     def __init__(self, coordinator, config_entry, repository_data):
         CoordinatorEntity.__init__(self, coordinator)
         VeeamRepositoryMixin.__init__(self, coordinator, config_entry, repository_data)
-
-    def _get_free_space_percent(self) -> float | None:
-        """Calculate free space percentage for the repository.
-
-        Free space is calculated as (capacity - used) / capacity * 100
-        to get the actual available space percentage.
-        """
-        repo = self._repository()
-        if not repo:
-            return None
-        capacity = repo.get("capacity_gb")
-        used = repo.get("used_space_gb")
-        if capacity and capacity > 0 and used is not None:
-            free = capacity - used
-            return (free / capacity) * 100
-        return None
 
 
 class VeeamRepositoryOnlineStatusSensor(VeeamRepositoryBinarySensorBase):
@@ -1165,51 +1211,3 @@ class VeeamRepositoryAccessibleSensor(VeeamRepositoryBinarySensorBase):
     @property
     def icon(self) -> str:
         return "mdi:folder-open" if self.is_on else "mdi:folder-lock"
-
-
-class VeeamRepositoryCapacityWarningSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Capacity Warning (< 15% free)."""
-
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = (
-            f"{config_entry.entry_id}_repository_{self._repo_id}_capacity_warning"
-        )
-        self._attr_name = "Capacity Warning"
-
-    @property
-    def is_on(self) -> bool | None:
-        free_percent = self._get_free_space_percent()
-        if free_percent is None:
-            return None
-        return free_percent < 15
-
-    @property
-    def icon(self) -> str:
-        return "mdi:alert" if self.is_on else "mdi:check-circle"
-
-
-class VeeamRepositoryCapacityCriticalSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Capacity Critical (< 5% free)."""
-
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = (
-            f"{config_entry.entry_id}_repository_{self._repo_id}_capacity_critical"
-        )
-        self._attr_name = "Capacity Critical"
-
-    @property
-    def is_on(self) -> bool | None:
-        free_percent = self._get_free_space_percent()
-        if free_percent is None:
-            return None
-        return free_percent < 5
-
-    @property
-    def icon(self) -> str:
-        return "mdi:alert-circle" if self.is_on else "mdi:check-circle"

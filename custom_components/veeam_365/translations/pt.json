@@ -66,5 +66,24 @@
       "invalid_auth": "Credenciais de autenticação inválidas",
       "unknown": "Ocorreu um erro inesperado"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Veeam Backup for Microsoft 365",
+        "description": "Configure as definições da integração Veeam Backup for Microsoft 365.",
+        "data": {
+          "api_version": "Versão da API"
+        },
+        "data_description": {
+          "api_version": "Selecione a versão da API REST Veeam a ser usada para esta integração"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Falha ao conectar ao servidor Veeam Backup for Microsoft 365",
+      "invalid_auth": "Credenciais de autenticação inválidas",
+      "unknown": "Ocorreu um erro inesperado"
+    }
   }
 }

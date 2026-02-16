@@ -66,5 +66,24 @@
       "invalid_auth": "身份验证凭据无效",
       "unknown": "发生意外错误"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Veeam Backup for Microsoft 365 选项",
+        "description": "配置 Veeam Backup for Microsoft 365 集成设置。",
+        "data": {
+          "api_version": "API 版本"
+        },
+        "data_description": {
+          "api_version": "选择用于此集成的 Veeam REST API 版本"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到 Veeam Backup for Microsoft 365 服务器",
+      "invalid_auth": "身份验证凭据无效",
+      "unknown": "发生意外错误"
+    }
   }
 }

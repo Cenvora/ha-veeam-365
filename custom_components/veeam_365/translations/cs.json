@@ -66,5 +66,24 @@
       "invalid_auth": "Neplatné přihlašovací údaje",
       "unknown": "Došlo k neočekávané chybě"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti Veeam Backup for Microsoft 365",
+        "description": "Nakonfigurujte nastavení integrace Veeam Backup for Microsoft 365.",
+        "data": {
+          "api_version": "Verze API"
+        },
+        "data_description": {
+          "api_version": "Vyberte verzi Veeam REST API pro tuto integraci"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se připojit k serveru Veeam Backup for Microsoft 365",
+      "invalid_auth": "Neplatné přihlašovací údaje",
+      "unknown": "Došlo k neočekávané chybě"
+    }
   }
 }

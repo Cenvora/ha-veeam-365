@@ -13,9 +13,9 @@ CONF_VERIFY_SSL = "verify_ssl"
 CONF_API_VERSION = "api_version"
 
 # Defaults
-DEFAULT_PORT = 9419
+DEFAULT_PORT = 4443
 DEFAULT_VERIFY_SSL = True
-DEFAULT_API_VERSION = "v8"
+DEFAULT_API_VERSION = "8"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def _discover_api_versions() -> dict[str, str]:
     """Dynamically discover available API versions from the veeam_365 package.
 
     Returns:
-        dict: Mapping of display version (e.g., "v8") to module name (e.g., "v8")
+        dict: Mapping of display version (e.g., "8") to module name (e.g., "v8")
     """
     versions = {}
 
@@ -34,9 +34,9 @@ def _discover_api_versions() -> dict[str, str]:
         if spec is None:
             _LOGGER.warning("veeam_365 package not found, using default API versions")
             return {
-                "v8": "v8",
-                "v7": "v7",
-                "v6": "v6",
+                "8": "v8",
+                "7": "v7",
+                "6": "v6",
             }
 
         # Get the package directory (handle namespace packages)
@@ -47,13 +47,13 @@ def _discover_api_versions() -> dict[str, str]:
         else:
             _LOGGER.warning("Could not determine veeam_365 package path, using defaults")
             return {
-                "v8": "v8",
-                "v7": "v7",
-                "v6": "v6",
+                "8": "v8",
+                "7": "v7",
+                "6": "v6",
             }
 
-        # Pattern to match version directories: v{major}_{minor}_rev{revision}
-        api_version_pattern = re.compile(r"^v(\d+)_(\d+)_rev(\d+)$")
+        # Pattern to match version directories: v{major}
+        api_version_pattern = re.compile(r"^v(\d+)$")
 
         # Scan for version directories
         for item in os.listdir(veeam_365_path):
@@ -61,17 +61,17 @@ def _discover_api_versions() -> dict[str, str]:
             if os.path.isdir(item_path) and api_version_pattern.match(item):
                 match = api_version_pattern.match(item)
                 if match:
-                    major, minor, rev = match.groups()
-                    # Convert to display format: "1.2-rev1"
-                    display_version = f"{major}.{minor}-rev{rev}"
+                    major = match.group(1)
+                    # Convert to display format: "8"
+                    display_version = f"{major}"
                     versions[display_version] = item
 
         if not versions:
             _LOGGER.warning("No API versions found in veeam_365 package, using defaults")
             return {
-                "v8": "v8",
-                "v7": "v7",
-                "v6": "v6",
+                "8": "v8",
+                "7": "v7",
+                "6": "v6",
             }
 
         _LOGGER.debug("Discovered API versions: %s", list(versions.keys()))
@@ -79,9 +79,9 @@ def _discover_api_versions() -> dict[str, str]:
     except Exception as err:
         _LOGGER.warning("Failed to discover API versions: %s, using defaults", err)
         return {
-            "v8": "v8",
-            "v7": "v7",
-            "v6": "v6",
+            "8": "v8",
+            "7": "v7",
+            "6": "v6",
         }
 
     return versions
@@ -98,7 +98,7 @@ def check_api_feature_availability(api_version: str, feature_path: str) -> bool:
     """Check if a specific API feature (endpoint/spec model) is available in the given API version.
 
     Args:
-        api_version: The API version to check (e.g., "v8")
+        api_version: The API version to check (e.g., "8")
         feature_path: The import path to check (e.g., "models.job_start_spec" or "api.jobs")
 
     Returns:

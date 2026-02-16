@@ -47,7 +47,9 @@ def _get_api_version_selector_config(
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    api_version = data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
+    api_version_display = data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
+    # Convert display version (e.g., "8") to module version (e.g., "v8") for VeeamClient
+    api_version = API_VERSIONS.get(api_version_display, "v8")
 
     try:
         from veeam_365.client import VeeamClient
@@ -56,31 +58,82 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise ConnectionError("Failed to import veeam_365 modules") from err
 
     base_url = f"https://{data[CONF_HOST]}:{data[CONF_PORT]}"
+    _LOGGER.debug(
+        "Attempting to validate connection to Veeam server at %s (verify_ssl=%s, api_version=%s)",
+        base_url,
+        data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        api_version_display,
+    )
 
+    vc = None
     try:
+        import json
 
-        def _test_connection():
-            vc = VeeamClient(
-                host=base_url,
-                username=data[CONF_USERNAME],
-                password=data[CONF_PASSWORD],
-                api_version=api_version,
-                verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        # Create VeeamClient - constructor is not blocking
+        _LOGGER.debug(
+            "Creating VeeamClient with username=%s, api_version=%s",
+            data[CONF_USERNAME],
+            api_version,
+        )
+        vc = VeeamClient(
+            host=base_url,
+            username=data[CONF_USERNAME],
+            password=data[CONF_PASSWORD],
+            api_version=api_version,
+            verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            disable_antiforgery_token=True,
+        )
+
+        # Connect is async, just await it directly
+        _LOGGER.debug("Calling vc.connect()...")
+        try:
+            await vc.connect()
+            _LOGGER.debug("vc.connect() succeeded")
+        except json.JSONDecodeError as err:
+            # Server returned non-JSON response (likely an error with empty body)
+            _LOGGER.error(
+                "Server at %s returned invalid JSON. Exception: %s. Position: line %s column %s.",
+                base_url,
+                err.msg,
+                err.lineno,
+                err.colno,
+                exc_info=True,
             )
-            # Run the blocking connect operation in a thread
-            return vc
+            raise ConnectionError(
+                "Server returned invalid response. Check credentials and server."
+            ) from err
+        except Exception as err:
+            _LOGGER.error(
+                "Unexpected error during connection: %s (type: %s)",
+                err,
+                type(err).__name__,
+                exc_info=True,
+            )
+            raise
 
-        vc = await asyncio.to_thread(_test_connection)
-
-        # Connect in a thread to avoid blocking the event loop
-        await asyncio.to_thread(vc.connect)
-
-        # Verify connection was successful by attempting to access the client
-        if not vc:
-            raise PermissionError("Authentication failed")
-
+    except PermissionError as err:
+        _LOGGER.error("Authentication failed for user %s: %s", data[CONF_USERNAME], err)
+        raise PermissionError("Invalid credentials") from err
+    except ConnectionError as err:
+        _LOGGER.error("Network connection error to %s: %s", base_url, err)
+        raise ConnectionError(f"Cannot connect to server at {base_url}") from err
     except Exception as err:
-        raise ConnectionError(f"Failed to connect: {err}") from err
+        _LOGGER.error(
+            "Failed to connect to Veeam server at %s (api_version=%s): %s",
+            base_url,
+            api_version,
+            err,
+            exc_info=True,
+        )
+        raise ConnectionError(f"Failed to connect: {type(err).__name__}: {err}") from err
+    finally:
+        # Always close the validation client to free up resources
+        if vc is not None:
+            try:
+                await vc.close()
+                _LOGGER.debug("Closed validation VeeamClient")
+            except Exception as err:
+                _LOGGER.warning("Error closing validation client: %s", err)
 
     return {"title": f"Veeam 365 ({data[CONF_HOST]})"}
 

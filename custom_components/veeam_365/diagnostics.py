@@ -36,6 +36,7 @@ async def async_get_config_entry_diagnostics(
         },
         "data": {
             "jobs_count": len(data.get("jobs", [])),
+            "copy_jobs_count": len(data.get("copy_jobs", [])),
             "repositories_count": len(data.get("repositories", [])),
             "sobrs_count": len(data.get("sobrs", [])),
             "has_server_info": data.get("server_info") is not None,
@@ -47,10 +48,8 @@ async def async_get_config_entry_diagnostics(
     if data.get("server_info"):
         server_info = data["server_info"]
         diagnostics_data["server"] = {
-            "build_version": server_info.get("build_version"),
-            "platform": server_info.get("platform"),
-            "database_vendor": server_info.get("database_vendor"),
-            "sql_server_edition": server_info.get("sql_server_edition"),
+            "version": server_info.get("version"),
+            "installation_id": server_info.get("installation_id"),
         }
 
     # Add license info (without sensitive data)
@@ -58,7 +57,6 @@ async def async_get_config_entry_diagnostics(
         license_info = data["license_info"]
         diagnostics_data["license"] = {
             "status": license_info.get("status"),
-            "edition": license_info.get("edition"),
             "type": license_info.get("type"),
         }
 
@@ -66,9 +64,17 @@ async def async_get_config_entry_diagnostics(
     if data.get("jobs"):
         jobs_summary = {}
         for job in data["jobs"]:
-            status = job.get("status", "unknown")
+            status = job.get("last_status", "unknown")
             jobs_summary[status] = jobs_summary.get(status, 0) + 1
         diagnostics_data["jobs_summary"] = jobs_summary
+
+    # Add copy job summaries (without sensitive details)
+    if data.get("copy_jobs"):
+        copy_jobs_summary = {}
+        for copy_job in data["copy_jobs"]:
+            status = copy_job.get("last_status", "unknown")
+            copy_jobs_summary[status] = copy_jobs_summary.get(status, 0) + 1
+        diagnostics_data["copy_jobs_summary"] = copy_jobs_summary
 
     # Add repository summaries (without sensitive details)
     if data.get("repositories"):

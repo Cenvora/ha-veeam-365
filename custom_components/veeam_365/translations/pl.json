@@ -63,6 +63,25 @@
       "reauth_successful": "Ponowne uwierzytelnienie powiodło się",
       "reconfigure_successful": "Rekonfiguracja powiodła się",
       "cannot_connect": "Nie udało się połączyć z serwerem Veeam",
+      "invalid_auth": "Nieправидłowe dane uwierzytelniające",
+      "unknown": "Wystąpił nieoczekiwany błąd"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Veeam Backup for Microsoft 365",
+        "description": "Skonfiguruj ustawienia integracji Veeam Backup for Microsoft 365.",
+        "data": {
+          "api_version": "Wersja API"
+        },
+        "data_description": {
+          "api_version": "Wybierz wersję API REST Veeam do użycia w tej integracji"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie udało się połączyć z serwerem Veeam Backup for Microsoft 365",
       "invalid_auth": "Nieprawidłowe dane uwierzytelniające",
       "unknown": "Wystąpił nieoczekiwany błąd"
     }
