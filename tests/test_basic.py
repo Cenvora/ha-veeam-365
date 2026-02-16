@@ -89,8 +89,9 @@ def test_async_dependency():
     with open(init_path) as f:
         init_content = f.read()
 
-    # Verify async usage
-    assert "await veeam_client.connect()" in init_content, "Should use async connect"
+    # Verify async usage - connect is wrapped in executor to avoid blocking imports
+    assert "veeam_client.connect()" in init_content, "Should call connect method"
+    assert "async_add_executor_job" in init_content, "Should use executor for blocking calls"
     assert "await veeam_client.call(" in init_content, "Should use async call method"
 
 

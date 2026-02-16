@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -35,20 +36,16 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from DATA_SCHEMA with values provided by the user.
     """
-    # Import the veeam_365 library
-    try:
-        from veeam_365.client import VeeamClient
-    except ImportError as err:
-        _LOGGER.error("Failed to import veeam_365 library: %s", err)
-        raise ConnectionError("veeam_365 library not installed") from err
-
     # Construct base URL
     base_url = f"https://{data[CONF_HOST]}:{data[CONF_PORT]}"
 
     # Test connection by attempting to authenticate
     try:
 
-        async def _test_connection():
+        def _test_connection_sync():
+            """Test connection synchronously in executor to avoid blocking imports."""
+            from veeam_365.client import VeeamClient
+
             client = VeeamClient(
                 host=base_url,
                 username=data[CONF_USERNAME],
@@ -56,11 +53,16 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
                 api_version=data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
             )
-            await client.connect()
-            await client.close()
-            return True
+            # Run async methods in a new event loop in the executor
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(client.connect())
+                loop.run_until_complete(client.close())
+                return True
+            finally:
+                loop.close()
 
-        result = await _test_connection()
+        result = await hass.async_add_executor_job(_test_connection_sync)
 
         if not result:
             raise PermissionError("Authentication failed")

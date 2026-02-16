@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
@@ -62,7 +63,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         """Fetch data from API."""
         try:
             # Ensure client is connected (VeeamClient handles idempotency)
-            await veeam_client.connect()
+            # Run connect in executor to avoid blocking import_module calls
+            def _connect_sync():
+                loop = asyncio.new_event_loop()
+                try:
+                    loop.run_until_complete(veeam_client.connect())
+                finally:
+                    loop.close()
+
+            await hass.async_add_executor_job(_connect_sync)
 
             # Get backup jobs using the veeam-365 library
             # Note: Pass method reference (not call) to veeam_client.call()
