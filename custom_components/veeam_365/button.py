@@ -203,7 +203,7 @@ async def async_setup_entry(
         stale_copy_job_ids = current_copy_job_ids - current_copy_jobs_in_data
         for copy_job_id in stale_copy_job_ids:
             for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
-                if entity.unique_id and f"copy_job_{copy_job_id}" in entity.unique_id:
+                if entity.unique_id and f"copy_job_{copy_job_id}_" in entity.unique_id:
                     _LOGGER.info("Removing stale copy job button: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_copy_job_ids.discard(copy_job_id)
