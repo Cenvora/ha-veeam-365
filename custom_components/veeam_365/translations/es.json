@@ -14,11 +14,29 @@
         },
         "data_description": {
           "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 4443)",
+          "port": "REST API port (default: 9419)",
           "username": "Username with administrator privileges",
           "password": "Password for the specified user account",
           "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
           "api_version": "Veeam REST API version to use"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar Veeam Backup for Microsoft 365",
+        "description": "Actualice la configuración de su servidor Veeam Backup for Microsoft 365.",
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "username": "Nombre de usuario",
+          "password": "Contraseña",
+          "verify_ssl": "Verificar certificado SSL"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
+          "port": "REST API port",
+          "username": "Administrator username",
+          "password": "User password",
+          "verify_ssl": "Verify SSL certificates"
         }
       },
       "reauth_confirm": {
@@ -31,25 +49,6 @@
         "data_description": {
           "username": "Administrator username",
           "password": "User password"
-        }
-      },
-      "reconfigure": {
-        "title": "Reconfigurar Veeam Backup for Microsoft 365",
-        "description": "Actualice la configuración de su servidor Veeam Backup for Microsoft 365.",
-        "data": {
-          "host": "Host",
-          "port": "Puerto",
-          "username": "Nombre de usuario",
-          "password": "Contraseña",
-          "verify_ssl": "Verificar certificado SSL",
-          "api_version": "Versión de API"
-        },
-        "data_description": {
-          "host": "Hostname or IP address of the Veeam server",
-          "port": "REST API port",
-          "username": "Administrator username",
-          "password": "User password",
-          "verify_ssl": "Verify SSL certificates"
         }
       }
     },
@@ -76,7 +75,7 @@
           "api_version": "Versión de API"
         },
         "data_description": {
-          "api_version": "Seleccione la versión de la API REST de Veeam para esta integración"
+          "api_version": "Select the Veeam REST API version to use for this integration"
         }
       }
     },
@@ -84,6 +83,198 @@
       "cannot_connect": "No se pudo conectar al servidor Veeam Backup for Microsoft 365",
       "invalid_auth": "Credenciales de autenticación inválidas",
       "unknown": "Ocurrió un error inesperado"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "job_name": {
+        "name": "Name"
+      },
+      "job_backup_type": {
+        "name": "Backup type"
+      },
+      "job_last_run": {
+        "name": "Last run"
+      },
+      "job_next_run": {
+        "name": "Next run"
+      },
+      "job_last_backup": {
+        "name": "Last backup"
+      },
+      "job_is_enabled": {
+        "name": "Enabled"
+      },
+      "job_last_status": {
+        "name": "Last status"
+      },
+      "copy_job_name": {
+        "name": "Name"
+      },
+      "copy_job_last_run": {
+        "name": "Last run"
+      },
+      "copy_job_last_backup": {
+        "name": "Last backup"
+      },
+      "copy_job_is_enabled": {
+        "name": "Enabled"
+      },
+      "copy_job_last_status": {
+        "name": "Last status"
+      },
+      "server_version": {
+        "name": "Product version"
+      },
+      "server_installation_id": {
+        "name": "Installation ID"
+      },
+      "server_last_successful_poll": {
+        "name": "Last successful poll"
+      },
+      "license_status": {
+        "name": "Status"
+      },
+      "license_type": {
+        "name": "Type"
+      },
+      "license_expiration": {
+        "name": "Expiration date"
+      },
+      "license_grace_period_expires": {
+        "name": "Grace period expiration"
+      },
+      "license_licensed_to": {
+        "name": "Licensed to"
+      },
+      "license_total_number": {
+        "name": "Total licenses"
+      },
+      "license_used_number": {
+        "name": "Used licenses"
+      },
+      "license_new_number": {
+        "name": "New licenses"
+      },
+      "license_auto_update": {
+        "name": "Auto update enabled"
+      },
+      "repository_type": {
+        "name": "Type"
+      },
+      "repository_description": {
+        "name": "Description"
+      },
+      "repository_used_space": {
+        "name": "Used space"
+      },
+      "repository_immutability_days": {
+        "name": "Immutability days"
+      }
+    },
+    "binary_sensor": {
+      "server_health_ok": {
+        "name": "Health OK"
+      },
+      "server_connected": {
+        "name": "Connected"
+      },
+      "repository_online": {
+        "name": "Online"
+      },
+      "repository_out_of_date": {
+        "name": "Out of date"
+      },
+      "repository_immutable": {
+        "name": "Immutable"
+      },
+      "repository_accessible": {
+        "name": "Accessible"
+      }
+    },
+    "button": {
+      "repository_rescan": {
+        "name": "Rescan repository"
+      },
+      "job_start": {
+        "name": "Start"
+      },
+      "job_stop": {
+        "name": "Stop"
+      },
+      "job_retry": {
+        "name": "Retry"
+      },
+      "job_enable": {
+        "name": "Enable"
+      },
+      "job_disable": {
+        "name": "Disable"
+      }
+    }
+  },
+  "exceptions": {
+    "connection_error": {
+      "message": "Failed to connect to Veeam server at {host}:{port}"
+    },
+    "authentication_failed": {
+      "message": "Authentication failed for user {username}"
+    },
+    "api_error": {
+      "message": "Veeam API error: {error}"
+    },
+    "repository_rescan_failed": {
+      "message": "Failed to rescan repository {repository_name}: {error}"
+    },
+    "extent_operation_failed": {
+      "message": "Failed to {operation} for extent {extent_name}: {error}"
+    },
+    "job_start_failed": {
+      "message": "Failed to start job {job_name}: {error}"
+    },
+    "job_stop_failed": {
+      "message": "Failed to stop job {job_name}: {error}"
+    },
+    "job_retry_failed": {
+      "message": "Failed to retry job {job_name}: {error}"
+    },
+    "job_enable_failed": {
+      "message": "Failed to enable job {job_name}: {error}"
+    },
+    "job_disable_failed": {
+      "message": "Failed to disable job {job_name}: {error}"
+    },
+    "timeout_error": {
+      "message": "Request to Veeam server timed out"
+    },
+    "invalid_response": {
+      "message": "Received invalid response from Veeam server"
+    }
+  },
+  "selector": {
+    "job_status": {
+      "options": {
+        "success": "Success",
+        "running": "Running",
+        "failed": "Failed",
+        "warning": "Warning",
+        "unknown": "Unknown"
+      }
+    },
+    "job_last_result": {
+      "options": {
+        "success": "Success",
+        "failed": "Failed",
+        "warning": "Warning",
+        "none": "None"
+      }
+    },
+    "license_status": {
+      "options": {
+        "valid": "Valid",
+        "expired": "Expired",
+        "invalid": "Invalid"
+      }
     }
   }
 }
