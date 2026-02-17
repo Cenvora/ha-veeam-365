@@ -63,7 +63,7 @@ jobs:
           import os
           import sys
           
-          manifest_path = 'custom_components/veeam_br/manifest.json'
+          manifest_path = 'custom_components/veeam_365/manifest.json'
           version = os.environ.get('VERSION', '')
           
           if not version:
@@ -95,10 +95,10 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          if git diff --quiet custom_components/veeam_br/manifest.json; then
+          if git diff --quiet custom_components/veeam_365/manifest.json; then
             echo "No changes to manifest.json"
           else
-            git add custom_components/veeam_br/manifest.json
+            git add custom_components/veeam_365/manifest.json
             git commit -m "chore: update manifest.json version to ${VERSION}"
             git push origin "${DEFAULT_BRANCH}"
             echo "✓ Committed and pushed manifest.json update"
