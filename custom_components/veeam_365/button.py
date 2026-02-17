@@ -194,7 +194,7 @@ async def async_setup_entry(
             for entity in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
                 # Match pattern: {entry_id}_job_{job_id}_{action}
                 # Avoid matching: {entry_id}_copy_job_{job_id}_{action}
-                if entity.unique_id and f"_job_{job_id}_" in entity.unique_id:
+                if entity.unique_id and f"{entry.entry_id}_job_{job_id}_" in entity.unique_id:
                     _LOGGER.info("Removing stale job button: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             current_job_ids.discard(job_id)
