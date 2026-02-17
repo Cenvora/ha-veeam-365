@@ -62,20 +62,12 @@ async def async_setup_entry(
 
             job_buttons = []
 
-            # Check if each button type's API feature is available before creating
-            if check_api_feature_availability(api_version, "models.job_start_action"):
+            # Check if job API is available - individual button methods handle their own errors
+            if check_api_feature_availability(api_version, "api.job"):
                 job_buttons.append(VeeamJobStartButton(coordinator, entry, job, veeam_client))
-
-            if check_api_feature_availability(api_version, "models.job_stop_action"):
                 job_buttons.append(VeeamJobStopButton(coordinator, entry, job, veeam_client))
-
-            if check_api_feature_availability(api_version, "models.job_retry_action"):
                 job_buttons.append(VeeamJobRetryButton(coordinator, entry, job, veeam_client))
-
-            if check_api_feature_availability(api_version, "models.job_enable_action"):
                 job_buttons.append(VeeamJobEnableButton(coordinator, entry, job, veeam_client))
-
-            if check_api_feature_availability(api_version, "models.job_disable_action"):
                 job_buttons.append(VeeamJobDisableButton(coordinator, entry, job, veeam_client))
 
             new_entities.extend(job_buttons)
@@ -95,23 +87,17 @@ async def async_setup_entry(
 
             copy_job_buttons = []
 
-            # Check if each button type's API feature is available before creating
-            if check_api_feature_availability(api_version, "models.copy_job_start_action"):
+            # Check if copy job API is available - individual button methods handle their own errors
+            if check_api_feature_availability(api_version, "api.copy_job"):
                 copy_job_buttons.append(
                     VeeamCopyJobStartButton(coordinator, entry, copy_job, veeam_client)
                 )
-
-            if check_api_feature_availability(api_version, "models.copy_job_stop_action"):
                 copy_job_buttons.append(
                     VeeamCopyJobStopButton(coordinator, entry, copy_job, veeam_client)
                 )
-
-            if check_api_feature_availability(api_version, "models.copy_job_enable_action"):
                 copy_job_buttons.append(
                     VeeamCopyJobEnableButton(coordinator, entry, copy_job, veeam_client)
                 )
-
-            if check_api_feature_availability(api_version, "models.copy_job_disable_action"):
                 copy_job_buttons.append(
                     VeeamCopyJobDisableButton(coordinator, entry, copy_job, veeam_client)
                 )
@@ -126,9 +112,7 @@ async def async_setup_entry(
             )
 
         # Create synchronize button for each repository
-        if check_api_feature_availability(
-            api_version, "models.backup_repository_start_synchronize_action"
-        ):
+        if check_api_feature_availability(api_version, "api.backup_repository"):
             for repository in coordinator.data.get("repositories", []):
                 repo_id = repository.get("id")
                 if not repo_id or repo_id in added_repository_ids:

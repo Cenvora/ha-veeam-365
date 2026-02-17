@@ -48,45 +48,15 @@ def test_button_api_feature_paths(component_path):
     with open(button_path, encoding="utf-8") as f:
         button_content = f.read()
 
-    # Verify correct model names are used for jobs (action suffix, not spec)
-    assert 'check_api_feature_availability(api_version, "models.job_start_action")' in button_content, (
-        "Jobs should use 'models.job_start_action' not 'models.job_start_spec'"
+    # Verify buttons check for API endpoint availability, not individual models
+    assert 'check_api_feature_availability(api_version, "api.job")' in button_content, (
+        "Job buttons should check for 'api.job' availability"
     )
-    assert 'check_api_feature_availability(api_version, "models.job_stop_action")' in button_content, (
-        "Jobs should use 'models.job_stop_action' not 'models.job_stop_spec'"
+    assert 'check_api_feature_availability(api_version, "api.copy_job")' in button_content, (
+        "Copy job buttons should check for 'api.copy_job' availability"
     )
-    assert 'check_api_feature_availability(api_version, "models.job_enable_action")' in button_content, (
-        "Jobs should use 'models.job_enable_action'"
-    )
-    assert 'check_api_feature_availability(api_version, "models.job_disable_action")' in button_content, (
-        "Jobs should use 'models.job_disable_action'"
-    )
-
-    # Verify copy job model names are used
-    assert 'check_api_feature_availability(api_version, "models.copy_job_start_action")' in button_content, (
-        "Copy jobs should use 'models.copy_job_start_action'"
-    )
-    assert 'check_api_feature_availability(api_version, "models.copy_job_stop_action")' in button_content, (
-        "Copy jobs should use 'models.copy_job_stop_action'"
-    )
-    assert 'check_api_feature_availability(api_version, "models.copy_job_enable_action")' in button_content, (
-        "Copy jobs should use 'models.copy_job_enable_action'"
-    )
-    assert 'check_api_feature_availability(api_version, "models.copy_job_disable_action")' in button_content, (
-        "Copy jobs should use 'models.copy_job_disable_action'"
-    )
-
-    # Verify repository synchronize model is used
-    assert "models.backup_repository_start_synchronize_action" in button_content, (
-        "Repository should use 'models.backup_repository_start_synchronize_action'"
-    )
-
-    # Verify incorrect names are NOT used (spec suffix instead of action)
-    assert 'check_api_feature_availability(api_version, "models.job_start_spec")' not in button_content, (
-        "Should not use 'models.job_start_spec', use 'models.job_start_action' instead"
-    )
-    assert 'check_api_feature_availability(api_version, "models.job_stop_spec")' not in button_content, (
-        "Should not use 'models.job_stop_spec', use 'models.job_stop_action' instead"
+    assert 'check_api_feature_availability(api_version, "api.backup_repository")' in button_content, (
+        "Repository button should check for 'api.backup_repository' availability"
     )
 
     # Verify we're using singular API module names in code
