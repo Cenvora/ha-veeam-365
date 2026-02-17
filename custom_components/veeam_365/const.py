@@ -120,12 +120,11 @@ def check_api_feature_availability(api_version: str, feature_path: str) -> bool:
 # It serves as reference documentation for developers - feature paths are used directly
 # in button.py and sensor.py via check_api_feature_availability() calls.
 API_FEATURE_REQUIREMENTS = {
-    # Button features
-    "job_start_button": "models.job_start_action",
-    "job_stop_button": "models.job_stop_action",
-    "job_enable_button": "api.job_enable_action",  # Uses enable_job endpoint
-    "job_disable_button": "api.job_disable_action",  # Uses disable_job endpoint
-    "repository_start_sync_button": "models.backup_repository_start_synchronize_action",
+    # Button features - buttons check for API endpoint availability, not individual models
+    # Individual button methods handle model import errors gracefully at runtime
+    "job_buttons": "api.job",  # Enables all job buttons (start, stop, retry, enable, disable)
+    "copy_job_buttons": "api.copy_job",  # Enables all copy job buttons
+    "repository_buttons": "api.backup_repository",  # Enables repository synchronize button
     # Data sources (for sensors)
     "jobs_data": "api.job",
     "copy_jobs_data": "api.copy_job",

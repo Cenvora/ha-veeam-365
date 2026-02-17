@@ -48,14 +48,26 @@ def test_button_api_feature_paths(component_path):
     with open(button_path, encoding="utf-8") as f:
         button_content = f.read()
 
-    # Verify correct API module names are used (singular form)
+    # Verify buttons check for API endpoint availability, not individual models
     assert 'check_api_feature_availability(api_version, "api.job")' in button_content, (
-        "Jobs should use 'api.job' not 'api.jobs'"
+        "Job buttons should check for 'api.job' availability"
+    )
+    assert 'check_api_feature_availability(api_version, "api.copy_job")' in button_content, (
+        "Copy job buttons should check for 'api.copy_job' availability"
+    )
+    assert 'check_api_feature_availability(api_version, "api.backup_repository")' in button_content, (
+        "Repository button should check for 'api.backup_repository' availability"
     )
 
-    # Verify incorrect names are NOT used
-    assert 'check_api_feature_availability(api_version, "api.jobs")' not in button_content, (
-        "Should not use plural 'api.jobs'"
+    # Verify we're using singular API module names in code
+    assert 'veeam_client.api, "job"' in button_content, (
+        "Should use singular 'job' not 'jobs' when calling veeam_client.api"
+    )
+    assert 'veeam_client.api, "copy_job"' in button_content, (
+        "Should use singular 'copy_job' not 'copy_jobs' when calling veeam_client.api"
+    )
+    assert 'veeam_client.api, "backup_repository"' in button_content, (
+        "Should use singular 'backup_repository' when calling veeam_client.api"
     )
 
 
