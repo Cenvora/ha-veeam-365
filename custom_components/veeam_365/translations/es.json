@@ -91,46 +91,46 @@
         "name": "Name"
       },
       "job_backup_type": {
-        "name": "Backup type"
+        "name": "Backup Type"
       },
       "job_last_run": {
-        "name": "Last run"
+        "name": "Last Run"
       },
       "job_next_run": {
-        "name": "Next run"
+        "name": "Next Run"
       },
       "job_last_backup": {
-        "name": "Last backup"
+        "name": "Last Backup"
       },
       "job_is_enabled": {
         "name": "Enabled"
       },
       "job_last_status": {
-        "name": "Last status"
+        "name": "Last Status"
       },
       "copy_job_name": {
         "name": "Name"
       },
       "copy_job_last_run": {
-        "name": "Last run"
+        "name": "Last Run"
       },
       "copy_job_last_backup": {
-        "name": "Last backup"
+        "name": "Last Backup"
       },
       "copy_job_is_enabled": {
         "name": "Enabled"
       },
       "copy_job_last_status": {
-        "name": "Last status"
+        "name": "Last Status"
       },
       "server_version": {
-        "name": "Product version"
+        "name": "Product Version"
       },
       "server_installation_id": {
         "name": "Installation ID"
       },
       "server_last_successful_poll": {
-        "name": "Last successful poll"
+        "name": "Last Successful Poll"
       },
       "license_status": {
         "name": "Status"
@@ -139,25 +139,25 @@
         "name": "Type"
       },
       "license_expiration": {
-        "name": "Expiration date"
+        "name": "Expiration Date"
       },
       "license_grace_period_expires": {
-        "name": "Grace period expiration"
+        "name": "Grace Period Expiration"
       },
       "license_licensed_to": {
-        "name": "Licensed to"
+        "name": "Licensed To"
       },
       "license_total_number": {
-        "name": "Total licenses"
+        "name": "Total Licenses"
       },
       "license_used_number": {
-        "name": "Used licenses"
+        "name": "Used Licenses"
       },
       "license_new_number": {
-        "name": "New licenses"
+        "name": "New Licenses"
       },
       "license_auto_update": {
-        "name": "Auto update enabled"
+        "name": "Auto Update Enabled"
       },
       "repository_type": {
         "name": "Type"
@@ -166,10 +166,10 @@
         "name": "Description"
       },
       "repository_used_space": {
-        "name": "Used space"
+        "name": "Used Space"
       },
       "repository_immutability_days": {
-        "name": "Immutability days"
+        "name": "Immutability Days"
       }
     },
     "binary_sensor": {
@@ -183,7 +183,7 @@
         "name": "Online"
       },
       "repository_out_of_date": {
-        "name": "Out of date"
+        "name": "Out of Date"
       },
       "repository_immutable": {
         "name": "Immutable"
@@ -194,7 +194,7 @@
     },
     "button": {
       "repository_rescan": {
-        "name": "Rescan repository"
+        "name": "Synchronize Cache"
       },
       "job_start": {
         "name": "Start"
