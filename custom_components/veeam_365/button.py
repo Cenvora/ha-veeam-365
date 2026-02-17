@@ -66,7 +66,6 @@ async def async_setup_entry(
             if check_api_feature_availability(api_version, "api.job"):
                 job_buttons.append(VeeamJobStartButton(coordinator, entry, job, veeam_client))
                 job_buttons.append(VeeamJobStopButton(coordinator, entry, job, veeam_client))
-                job_buttons.append(VeeamJobRetryButton(coordinator, entry, job, veeam_client))
                 job_buttons.append(VeeamJobEnableButton(coordinator, entry, job, veeam_client))
                 job_buttons.append(VeeamJobDisableButton(coordinator, entry, job, veeam_client))
 
@@ -444,52 +443,6 @@ class VeeamJobStopButton(VeeamJobButtonBase):
                 self._job_name,
                 call_err,
             )
-            raise
-
-
-class VeeamJobRetryButton(VeeamJobButtonBase):
-    """Button to retry a failed Veeam job."""
-
-    def __init__(self, coordinator, config_entry, job_data, veeam_client):
-        """Initialize the button."""
-        super().__init__(coordinator, config_entry, job_data, veeam_client)
-        self._attr_unique_id = f"{config_entry.entry_id}_job_{self._job_id}_retry"
-        self._attr_name = "Retry"
-
-    @property
-    def icon(self) -> str:
-        """Return the icon for the button."""
-        return "mdi:refresh"
-
-    async def async_press(self) -> None:
-        """Handle the button press to retry the job."""
-        # Import the body model for the retry request
-        try:
-            JobRetryAction = await self._import_spec_model("job_retry_action")
-            # JobRetryAction typically has no required parameters
-            body = JobRetryAction()
-        except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobRetryAction: %s. Cannot retry job.", e)
-            return
-
-        # Call the retry endpoint using VeeamClient
-        try:
-            jobs_api = await asyncio.to_thread(self._veeam_client.api, "job")
-            await self._veeam_client.call(
-                jobs_api.job_retry,
-                id=self._job_id,
-                body=body,
-            )
-            _LOGGER.info("Successfully retried job: %s", self._job_name)
-            # Request coordinator update to refresh job state
-            await self.coordinator.async_request_refresh()
-        except Exception as call_err:
-            _LOGGER.error(
-                "Failed to retry job %s: %s",
-                self._job_name,
-                call_err,
-            )
-            raise
 
 
 class VeeamJobEnableButton(VeeamJobButtonBase):
