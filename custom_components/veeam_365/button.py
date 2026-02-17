@@ -376,10 +376,10 @@ class VeeamJobStartButton(VeeamJobButtonBase):
         """Handle the button press to start the job."""
         # Import the body model for the start request
         try:
-            JobStartAction = await self._import_spec_model("job_start_action")
-            body = JobStartAction(perform_active_full=False)
+            JobStart = await self._import_spec_model("job_start")
+            body = JobStart(perform_active_full=False)
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobStartAction: %s. Cannot start job.", e)
+            _LOGGER.error("Failed to import JobStart: %s. Cannot start job.", e)
             return
 
         # Call the start endpoint using VeeamClient
@@ -420,11 +420,11 @@ class VeeamJobStopButton(VeeamJobButtonBase):
         """Handle the button press to stop the job."""
         # Import the body model for the stop request
         try:
-            JobStopAction = await self._import_spec_model("job_stop_action")
-            # JobStopAction typically has no required parameters
-            body = JobStopAction()
+            JobStop = await self._import_spec_model("job_stop")
+            # JobStop typically has no required parameters
+            body = JobStop()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobStopAction: %s. Cannot stop job.", e)
+            _LOGGER.error("Failed to import JobStop: %s. Cannot stop job.", e)
             return
 
         # Call the stop endpoint using VeeamClient
@@ -465,11 +465,11 @@ class VeeamJobRetryButton(VeeamJobButtonBase):
         """Handle the button press to retry the job."""
         # Import the body model for the retry request
         try:
-            JobRetryAction = await self._import_spec_model("job_retry_action")
-            # JobRetryAction typically has no required parameters
-            body = JobRetryAction()
+            JobRetry = await self._import_spec_model("job_retry")
+            # JobRetry typically has no required parameters
+            body = JobRetry()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobRetryAction: %s. Cannot retry job.", e)
+            _LOGGER.error("Failed to import JobRetry: %s. Cannot retry job.", e)
             return
 
         # Call the retry endpoint using VeeamClient
@@ -510,10 +510,10 @@ class VeeamJobEnableButton(VeeamJobButtonBase):
         """Handle the button press to enable the job."""
         # Import the body model for the enable request
         try:
-            JobEnableAction = await self._import_spec_model("job_enable_action")
-            body = JobEnableAction()
+            JobEnable = await self._import_spec_model("job_enable")
+            body = JobEnable()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobEnableAction: %s. Cannot enable job.", e)
+            _LOGGER.error("Failed to import JobEnable: %s. Cannot enable job.", e)
             return
 
         # Call the enable endpoint using VeeamClient
@@ -554,10 +554,10 @@ class VeeamJobDisableButton(VeeamJobButtonBase):
         """Handle the button press to disable the job."""
         # Import the body model for the disable request
         try:
-            JobDisableAction = await self._import_spec_model("job_disable_action")
-            body = JobDisableAction()
+            JobDisable = await self._import_spec_model("job_disable")
+            body = JobDisable()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import JobDisableAction: %s. Cannot disable job.", e)
+            _LOGGER.error("Failed to import JobDisable: %s. Cannot disable job.", e)
             return
 
         # Call the disable endpoint using VeeamClient
@@ -622,7 +622,7 @@ class VeeamCopyJobButtonBase(CoordinatorEntity, ButtonEntity):
 
         Args:
             spec_name: Name of the spec model
-                (e.g., 'copy_job_start_action', 'copy_job_stop_action')
+                (e.g., 'copy_job_start', 'copy_job_stop')
 
         Returns:
             The spec model class
@@ -658,10 +658,10 @@ class VeeamCopyJobStartButton(VeeamCopyJobButtonBase):
         """Handle the button press to start the copy job."""
         # Import the body model for the start request
         try:
-            CopyJobStartAction = await self._import_spec_model("copy_job_start_action")
-            body = CopyJobStartAction()
+            CopyJobStart = await self._import_spec_model("copy_job_start")
+            body = CopyJobStart()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import CopyJobStartAction: %s. Cannot start copy job.", e)
+            _LOGGER.error("Failed to import CopyJobStart: %s. Cannot start copy job.", e)
             return
 
         # Call the start endpoint using VeeamClient
@@ -702,10 +702,10 @@ class VeeamCopyJobStopButton(VeeamCopyJobButtonBase):
         """Handle the button press to stop the copy job."""
         # Import the body model for the stop request
         try:
-            CopyJobStopAction = await self._import_spec_model("copy_job_stop_action")
-            body = CopyJobStopAction()
+            CopyJobStop = await self._import_spec_model("copy_job_stop")
+            body = CopyJobStop()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import CopyJobStopAction: %s. Cannot stop copy job.", e)
+            _LOGGER.error("Failed to import CopyJobStop: %s. Cannot stop copy job.", e)
             return
 
         # Call the stop endpoint using VeeamClient
@@ -746,10 +746,10 @@ class VeeamCopyJobEnableButton(VeeamCopyJobButtonBase):
         """Handle the button press to enable the copy job."""
         # Import the body model for the enable request
         try:
-            CopyJobEnableAction = await self._import_spec_model("copy_job_enable_action")
-            body = CopyJobEnableAction()
+            CopyJobEnable = await self._import_spec_model("copy_job_enable")
+            body = CopyJobEnable()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import CopyJobEnableAction: %s. Cannot enable copy job.", e)
+            _LOGGER.error("Failed to import CopyJobEnable: %s. Cannot enable copy job.", e)
             return
 
         # Call the enable endpoint using VeeamClient
@@ -790,10 +790,10 @@ class VeeamCopyJobDisableButton(VeeamCopyJobButtonBase):
         """Handle the button press to disable the copy job."""
         # Import the body model for the disable request
         try:
-            CopyJobDisableAction = await self._import_spec_model("copy_job_disable_action")
-            body = CopyJobDisableAction()
+            CopyJobDisable = await self._import_spec_model("copy_job_disable")
+            body = CopyJobDisable()
         except (ImportError, AttributeError) as e:
-            _LOGGER.error("Failed to import CopyJobDisableAction: %s. Cannot disable copy job.", e)
+            _LOGGER.error("Failed to import CopyJobDisable: %s. Cannot disable copy job.", e)
             return
 
         # Call the disable endpoint using VeeamClient
