@@ -202,9 +202,6 @@
       "job_stop": {
         "name": "Stop"
       },
-      "job_retry": {
-        "name": "Retry"
-      },
       "job_enable": {
         "name": "Enable"
       },
@@ -226,17 +223,11 @@
     "repository_rescan_failed": {
       "message": "Failed to rescan repository {repository_name}: {error}"
     },
-    "extent_operation_failed": {
-      "message": "Failed to {operation} for extent {extent_name}: {error}"
-    },
     "job_start_failed": {
       "message": "Failed to start job {job_name}: {error}"
     },
     "job_stop_failed": {
       "message": "Failed to stop job {job_name}: {error}"
-    },
-    "job_retry_failed": {
-      "message": "Failed to retry job {job_name}: {error}"
     },
     "job_enable_failed": {
       "message": "Failed to enable job {job_name}: {error}"
