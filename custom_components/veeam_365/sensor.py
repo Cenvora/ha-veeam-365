@@ -1,4 +1,4 @@
-"""Support for Veeam Backup & Replication sensors."""
+"""Support for Veeam Backup for Microsoft 365 sensors."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -184,6 +184,7 @@ async def async_setup_entry(
             return
 
         entity_reg = er.async_get(hass)
+        device_reg = dr.async_get(hass)
 
         # Get current IDs from coordinator data
         current_jobs_in_data = {
@@ -206,6 +207,11 @@ async def async_setup_entry(
                 if entity.unique_id and f"job_{job_id}" in entity.unique_id:
                     _LOGGER.info("Removing stale job entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
+            # Remove the device itself
+            device = device_reg.async_get_device(identifiers={(DOMAIN, f"job_{job_id}")})
+            if device:
+                _LOGGER.info("Removing stale job device: %s", device.id)
+                device_reg.async_remove_device(device.id)
             current_job_ids.discard(job_id)
 
         # Find stale copy job entities
@@ -215,6 +221,11 @@ async def async_setup_entry(
                 if entity.unique_id and f"copy_job_{copy_job_id}" in entity.unique_id:
                     _LOGGER.info("Removing stale copy job entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
+            # Remove the device itself
+            device = device_reg.async_get_device(identifiers={(DOMAIN, f"copy_job_{copy_job_id}")})
+            if device:
+                _LOGGER.info("Removing stale copy job device: %s", device.id)
+                device_reg.async_remove_device(device.id)
             current_copy_job_ids.discard(copy_job_id)
 
         # Find stale repository entities
@@ -224,6 +235,11 @@ async def async_setup_entry(
                 if entity.unique_id and f"repository_{repo_id}" in entity.unique_id:
                     _LOGGER.info("Removing stale repository entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
+            # Remove the device itself
+            device = device_reg.async_get_device(identifiers={(DOMAIN, f"repository_{repo_id}")})
+            if device:
+                _LOGGER.info("Removing stale repository device: %s", device.id)
+                device_reg.async_remove_device(device.id)
             current_repo_ids.discard(repo_id)
 
     # First attempt (after first refresh already ran)

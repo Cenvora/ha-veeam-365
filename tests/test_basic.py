@@ -254,3 +254,35 @@ def test_job_attributes():
     assert "is_enabled" in init_content
     assert "total_objects" in init_content
     assert "processed_objects" in init_content
+
+
+def test_device_removal_on_stale_items():
+    """Test that stale devices are removed from device registry when items are deleted."""
+    from pathlib import Path
+
+    sensor_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "sensor.py"
+
+    with open(sensor_path) as f:
+        sensor_content = f.read()
+
+    # Check that device registry is imported
+    assert "device_registry as dr" in sensor_content, "device_registry should be imported"
+
+    # Check that device registry is obtained in the stale removal function
+    assert "dr.async_get(hass)" in sensor_content, "device registry should be retrieved"
+
+    # Check that devices are looked up by their identifiers for each type
+    assert 'f"job_{job_id}"' in sensor_content and "async_get_device" in sensor_content, (
+        "stale job devices should be looked up by identifier"
+    )
+    assert 'f"copy_job_{copy_job_id}"' in sensor_content, (
+        "stale copy job devices should be looked up by identifier"
+    )
+    assert 'f"repository_{repo_id}"' in sensor_content, (
+        "stale repository devices should be looked up by identifier"
+    )
+
+    # Check that devices are removed when found
+    assert "device_reg.async_remove_device(device.id)" in sensor_content, (
+        "stale devices should be removed from device registry"
+    )
