@@ -223,9 +223,7 @@ async def async_setup_entry(
                     _LOGGER.info("Removing stale copy job entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             # Remove the device itself
-            device = device_reg.async_get_device(
-                identifiers={(DOMAIN, f"copy_job_{copy_job_id}")}
-            )
+            device = device_reg.async_get_device(identifiers={(DOMAIN, f"copy_job_{copy_job_id}")})
             if device:
                 _LOGGER.info("Removing stale copy job device: %s", device.id)
                 device_reg.async_remove_device(device.id)
@@ -239,9 +237,7 @@ async def async_setup_entry(
                     _LOGGER.info("Removing stale repository entity: %s", entity.entity_id)
                     entity_reg.async_remove(entity.entity_id)
             # Remove the device itself
-            device = device_reg.async_get_device(
-                identifiers={(DOMAIN, f"repository_{repo_id}")}
-            )
+            device = device_reg.async_get_device(identifiers={(DOMAIN, f"repository_{repo_id}")})
             if device:
                 _LOGGER.info("Removing stale repository device: %s", device.id)
                 device_reg.async_remove_device(device.id)
