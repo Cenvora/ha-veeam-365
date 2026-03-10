@@ -1,4 +1,4 @@
-"""Support for Veeam Backup & Replication buttons."""
+"""Support for Veeam Backup for Microsoft buttons."""
 
 from __future__ import annotations
 
