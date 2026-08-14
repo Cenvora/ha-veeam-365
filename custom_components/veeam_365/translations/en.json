@@ -14,11 +14,11 @@
         },
         "data_description": {
           "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 9419)",
+          "port": "REST API port (default: 4443)",
           "username": "Username with administrator privileges",
           "password": "Password for the specified user account",
           "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
-          "api_version": "Veeam REST API version to use"
+          "api_version": "Leave on 'auto' to detect the newest API version this server serves, or pick a version to pin it."
         }
       },
       "reconfigure": {
@@ -33,7 +33,7 @@
         },
         "data_description": {
           "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port",
+          "port": "REST API port (default: 4443)",
           "username": "Administrator username",
           "password": "User password",
           "verify_ssl": "Verify SSL certificates"
@@ -55,7 +55,8 @@
     "error": {
       "cannot_connect": "Failed to connect to Veeam Backup for Microsoft 365 server",
       "invalid_auth": "Invalid authentication credentials",
-      "unknown": "Unexpected error occurred"
+      "unknown": "Unexpected error occurred",
+      "wrong_port": "Could not connect on that port, but the Veeam REST API answered on port {wrong_port}. Veeam Backup for Microsoft 365 serves the REST API on 4443 by default; check the port configured in the console."
     },
     "abort": {
       "already_configured": "This Veeam Backup for Microsoft 365 server is already configured",
@@ -75,14 +76,15 @@
           "api_version": "API Version"
         },
         "data_description": {
-          "api_version": "Select the Veeam REST API version to use for this integration"
+          "api_version": "Select 'auto' to re-detect the newest API version this server serves."
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to Veeam Backup for Microsoft 365 server",
       "invalid_auth": "Invalid authentication credentials",
-      "unknown": "Unexpected error occurred"
+      "unknown": "Unexpected error occurred",
+      "wrong_port": "Could not connect on that port, but the Veeam REST API answered on port {wrong_port}. Veeam Backup for Microsoft 365 serves the REST API on 4443 by default; check the port configured in the console."
     }
   },
   "entity": {
@@ -266,6 +268,12 @@
         "expired": "Expired",
         "invalid": "Invalid"
       }
+    }
+  },
+  "issues": {
+    "unsupported_license": {
+      "title": "Unsupported Veeam license on {host}",
+      "description": "The Veeam Backup for Microsoft 365 server at **{host}** reports the license **{license}**.\n\nCommunity Edition, and servers whose license cannot be read, are not supported by this integration: entitlements differ and some REST API endpoints answer differently or not at all, so entities may be missing or unreliable.\n\nThe integration keeps running — nothing is blocked. If you hit problems, please include this license type in your bug report. Install a supported license, or remove the integration, to clear this warning."
     }
   }
 }
