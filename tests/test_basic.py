@@ -272,17 +272,17 @@ def test_device_removal_on_stale_items():
     assert "dr.async_get(hass)" in sensor_content, "device registry should be retrieved"
 
     # Check that devices are looked up by their identifiers for each type
-    assert 'f"job_{job_id}"' in sensor_content and "async_get_device" in sensor_content, (
-        "stale job devices should be looked up by identifier"
-    )
-    assert 'f"copy_job_{copy_job_id}"' in sensor_content, (
-        "stale copy job devices should be looked up by identifier"
-    )
-    assert 'f"repository_{repo_id}"' in sensor_content, (
-        "stale repository devices should be looked up by identifier"
-    )
+    assert (
+        'f"job_{job_id}"' in sensor_content and "async_get_device" in sensor_content
+    ), "stale job devices should be looked up by identifier"
+    assert (
+        'f"copy_job_{copy_job_id}"' in sensor_content
+    ), "stale copy job devices should be looked up by identifier"
+    assert (
+        'f"repository_{repo_id}"' in sensor_content
+    ), "stale repository devices should be looked up by identifier"
 
     # Check that devices are removed when found
-    assert "device_reg.async_remove_device(device.id)" in sensor_content, (
-        "stale devices should be removed from device registry"
-    )
+    assert (
+        "device_reg.async_remove_device(device.id)" in sensor_content
+    ), "stale devices should be removed from device registry"

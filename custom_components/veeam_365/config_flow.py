@@ -13,10 +13,13 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv, selector
 import voluptuous as vol
 
+from .api_version import async_resolve_api_version
 from .const import (
     API_VERSIONS,
+    AUTO_API_VERSION,
     CONF_API_VERSION,
     CONF_VERIFY_SSL,
+    DEFAULT_API_MODULE,
     DEFAULT_API_VERSION,
     DEFAULT_PORT,
     DEFAULT_VERIFY_SSL,
@@ -26,30 +29,89 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class WrongPortError(ConnectionError):
+    """The configured port did not answer, but another REST API port did.
+
+    Carries the port that answered so the form can name it.
+    """
+
+    def __init__(self, port: int) -> None:
+        super().__init__(f"The REST API answered on port {port}, not the configured port")
+        self.port = port
+
+
 def _get_api_version_selector_config(
     preferred_version: str | None = None,
 ) -> tuple[list[str], str]:
-    """Get API version options and default for selector."""
-    api_version_options = list(API_VERSIONS.keys())
+    """Get API version options and default for selector.
+
+    AUTO_API_VERSION leads the list and is the default, so the common case is not asking
+    the user to know which version their server speaks.
+    """
+    api_version_options = [AUTO_API_VERSION, *API_VERSIONS.keys()]
 
     if preferred_version and preferred_version in api_version_options:
         return api_version_options, preferred_version
 
-    if DEFAULT_API_VERSION in api_version_options:
-        return api_version_options, DEFAULT_API_VERSION
+    return api_version_options, AUTO_API_VERSION
 
-    if api_version_options:
-        return api_version_options, api_version_options[0]
 
-    _LOGGER.error("No API versions available, using fallback")
-    return [DEFAULT_API_VERSION], DEFAULT_API_VERSION
+async def async_find_working_port(data: dict[str, Any], configured_port: int) -> int | None:
+    """Return another port the REST API answers on, or None.
+
+    The REST API service listens on 4443 by default but the port is configurable, so "cannot
+    connect" is quite often the wrong port rather than a wrong host or a firewall. Worth one
+    extra probe to be able to say which.
+    """
+    try:
+        # Guarded with the probe itself: this runs inside validate_input's failure handler,
+        # so an ImportError escaping here would replace the real connection error with
+        # "unknown". A hand-installed older veeam-365 should degrade to the generic error,
+        # not a misleading one.
+        from veeam_365.discovery import DEFAULT_PORTS, detect_rest_api
+
+        others = [port for port in DEFAULT_PORTS if port != configured_port]
+        if not others:
+            return None
+
+        endpoint = await detect_rest_api(
+            data[CONF_HOST],
+            ports=others,
+            versions=list(API_VERSIONS.values()),
+            verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        )
+    except Exception as err:  # noqa: BLE001 - a failed probe just means no advice to give
+        _LOGGER.debug("Port probe failed: %s", err)
+        return None
+
+    return endpoint.port if endpoint else None
+
+
+async def _raise_wrong_port_if_answering(data: dict[str, Any], err: Exception) -> None:
+    """Turn a connection failure into WrongPortError when another port answers."""
+    working_port = await async_find_working_port(data, data[CONF_PORT])
+    if working_port is None:
+        return
+
+    _LOGGER.warning(
+        "Could not reach the Veeam REST API on %s:%s, but it answered on port %s",
+        data[CONF_HOST],
+        data[CONF_PORT],
+        working_port,
+    )
+    raise WrongPortError(working_port) from err
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
-    api_version_display = data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
+    """Validate the user input allows us to connect.
+
+    A stored "auto" is resolved here only to test the connection — it is deliberately not
+    written back. Keeping the sentinel means every setup re-resolves it, so a server upgrade
+    or a newer veeam-365 moves the entry onto the newer version on its own.
+    """
+    api_version_display = await async_resolve_api_version(data)
     # Convert display version (e.g., "8") to module version (e.g., "v8") for VeeamClient
-    api_version = API_VERSIONS.get(api_version_display, "v8")
+    api_version = API_VERSIONS.get(api_version_display, DEFAULT_API_MODULE)
 
     try:
         from veeam_365.client import VeeamClient
@@ -116,6 +178,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise PermissionError("Invalid credentials") from err
     except ConnectionError as err:
         _LOGGER.error("Network connection error to %s: %s", base_url, err)
+        await _raise_wrong_port_if_answering(data, err)
         raise ConnectionError(f"Cannot connect to server at {base_url}") from err
     except Exception as err:
         _LOGGER.error(
@@ -125,6 +188,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             err,
             exc_info=True,
         )
+        await _raise_wrong_port_if_answering(data, err)
         raise ConnectionError(f"Failed to connect: {type(err).__name__}: {err}") from err
     finally:
         # Always logout and close the validation client to free up resources
@@ -173,6 +237,7 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle reconfiguration of the integration."""
         errors: dict[str, str] = {}
+        wrong_port: int | None = None
         reconf_entry = self._get_reconfigure_entry()
 
         if user_input is not None:
@@ -190,6 +255,10 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await validate_input(self.hass, data)
             except PermissionError:
                 errors["base"] = "invalid_auth"
+            except WrongPortError as err:
+                # Subclasses ConnectionError, so it has to be caught before it
+                errors["base"] = "wrong_port"
+                wrong_port = err.port
             except ConnectionError:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -223,6 +292,7 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "host": reconf_entry.data.get(CONF_HOST),
+                "wrong_port": str(wrong_port or ""),
             },
         )
 
@@ -235,6 +305,7 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Confirm reauth dialog."""
         errors: dict[str, str] = {}
+        wrong_port: int | None = None
         reauth_entry = self._get_reauth_entry()
 
         if user_input is not None:
@@ -249,6 +320,10 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await validate_input(self.hass, data)
             except PermissionError:
                 errors["base"] = "invalid_auth"
+            except WrongPortError as err:
+                # Subclasses ConnectionError, so it has to be caught before it
+                errors["base"] = "wrong_port"
+                wrong_port = err.port
             except ConnectionError:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -274,11 +349,13 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "host": reauth_entry.data[CONF_HOST],
+                "wrong_port": str(wrong_port or ""),
             },
         )
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
+        wrong_port: int | None = None
 
         if user_input is not None:
             await self.async_set_unique_id(f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}")
@@ -288,6 +365,10 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await validate_input(self.hass, user_input)
             except PermissionError:
                 errors["base"] = "invalid_auth"
+            except WrongPortError as err:
+                # Subclasses ConnectionError, so it has to be caught before it
+                errors["base"] = "wrong_port"
+                wrong_port = err.port
             except ConnectionError:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -296,15 +377,27 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_create_entry(title=info["title"], data=user_input)
 
-        api_version_options, api_version_default = _get_api_version_selector_config()
+        api_version_options, api_version_default = _get_api_version_selector_config(
+            user_input.get(CONF_API_VERSION) if user_input else None
+        )
+
+        # Preserve user input on validation failure (except password for security)
+        host_default = user_input[CONF_HOST] if user_input else vol.UNDEFINED
+        port_default = user_input.get(CONF_PORT, DEFAULT_PORT) if user_input else DEFAULT_PORT
+        username_default = user_input[CONF_USERNAME] if user_input else vol.UNDEFINED
+        verify_ssl_default = (
+            user_input.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+            if user_input
+            else DEFAULT_VERIFY_SSL
+        )
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): cv.string,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
-                vol.Required(CONF_USERNAME): cv.string,
+                vol.Required(CONF_HOST, default=host_default): cv.string,
+                vol.Required(CONF_PORT, default=port_default): cv.port,
+                vol.Required(CONF_USERNAME, default=username_default): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
-                vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
+                vol.Optional(CONF_VERIFY_SSL, default=verify_ssl_default): cv.boolean,
                 vol.Optional(
                     CONF_API_VERSION, default=api_version_default
                 ): selector.SelectSelector(
@@ -316,7 +409,12 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={"wrong_port": str(wrong_port or "")},
+        )
 
 
 class Veeam365OptionsFlow(config_entries.OptionsFlow):
@@ -324,6 +422,7 @@ class Veeam365OptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
+        wrong_port: int | None = None
 
         if user_input is not None:
             test_data = {**self.config_entry.data, CONF_API_VERSION: user_input[CONF_API_VERSION]}
@@ -332,15 +431,21 @@ class Veeam365OptionsFlow(config_entries.OptionsFlow):
                 await validate_input(self.hass, test_data)
             except PermissionError:
                 errors["base"] = "invalid_auth"
+            except WrongPortError as err:
+                # Subclasses ConnectionError, so it has to be caught before it
+                errors["base"] = "wrong_port"
+                wrong_port = err.port
             except ConnectionError:
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected exception validating options")
                 errors["base"] = "unknown"
             else:
+                # Stored verbatim, including "auto": the point of auto is that it is
+                # re-resolved on every setup rather than frozen at the moment it was chosen
                 return self.async_create_entry(title="", data=user_input)
 
-        api_version_options = list(API_VERSIONS.keys())
+        api_version_options = [AUTO_API_VERSION, *API_VERSIONS.keys()]
 
         current_api_version = self.config_entry.options.get(
             CONF_API_VERSION,
@@ -367,4 +472,9 @@ class Veeam365OptionsFlow(config_entries.OptionsFlow):
             }
         )
 
-        return self.async_show_form(step_id="init", data_schema=options_schema, errors=errors)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=options_schema,
+            errors=errors,
+            description_placeholders={"wrong_port": str(wrong_port or "")},
+        )

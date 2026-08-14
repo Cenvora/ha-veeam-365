@@ -1,0 +1,93 @@
+blueprint:
+  name: Veeam 365 repository offline
+  description: >-
+    Notify when a Veeam Backup for Microsoft 365 backup repository stops being reachable, and
+    again when it recovers.
+
+    A repository that is out of sync or out of order does not fail every job immediately, so
+    this often goes unnoticed until a restore is needed. Pick the **Online** sensors of the
+    repositories to watch, and optionally their **Accessible** sensors too.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/repository_offline.yaml
+  author: Cenvora
+  input:
+    repository_sensors:
+      name: Repository Online sensors
+      description: >-
+        One or more Veeam repository "Online" sensors. "Accessible" sensors work here too —
+        both report a repository the server cannot currently use.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+    offline_for:
+      name: Offline for
+      description: >-
+        How long the repository must stay offline before notifying, so a brief blip during a
+        synchronization does not raise an alert.
+      default:
+        minutes: 10
+      selector:
+        duration:
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run when a repository goes offline. Available variables: `repository_name`,
+        `repository_entity_id`, and ready-made `title` and `message`.
+      selector:
+        action:
+    recovery_action:
+      name: Recovery action
+      description: Optional. What to run when the repository comes back.
+      default: []
+      selector:
+        action:
+
+mode: queued
+max: 20
+
+triggers:
+  - trigger: state
+    entity_id: !input repository_sensors
+    from: "on"
+    to: "off"
+    for: !input offline_for
+    id: offline
+  - trigger: state
+    entity_id: !input repository_sensors
+    from: "off"
+    to: "on"
+    id: online
+
+variables:
+  repository_entity_id: "{{ trigger.entity_id }}"
+  # Each repository is its own device, so the device name is the repository name
+  repository_name: >-
+    {{ device_attr(trigger.entity_id, 'name_by_user')
+       or device_attr(trigger.entity_id, 'name')
+       or trigger.to_state.name | replace(' Online', '') | replace(' Accessible', '') }}
+  title: >-
+    {{ 'Veeam 365 repository offline: ' ~ repository_name
+       if trigger.id == 'offline'
+       else 'Veeam 365 repository back online: ' ~ repository_name }}
+  message: >-
+    {{ 'Backup repository ' ~ repository_name ~ ' has been unreachable for a while. Jobs '
+       ~ 'writing to it will fail until it recovers.'
+       if trigger.id == 'offline'
+       else 'Backup repository ' ~ repository_name ~ ' is reachable again.' }}
+
+# A reload takes every entity through unavailable, and both triggers pin from and to, so a
+# restart cannot re-alert.
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: offline
+        sequence: !input notification_action
+      - conditions:
+          - condition: trigger
+            id: online
+        sequence: !input recovery_action

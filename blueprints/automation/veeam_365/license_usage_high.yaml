@@ -1,0 +1,102 @@
+blueprint:
+  name: Veeam 365 running out of licenses
+  description: >-
+    Notify when Veeam Backup for Microsoft 365 has used most of its licensed users, and again
+    when usage drops back.
+
+    VB365 licenses per protected user, and new users are picked up automatically as they are
+    added to the organization — so a tenant can quietly grow past what is licensed, and the
+    first sign is jobs skipping users. This watches the ratio instead.
+
+    Pick the license device's **Used Licenses** and **Total Licenses** sensors.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/license_usage_high.yaml
+  author: Cenvora
+  input:
+    used_sensor:
+      name: Used Licenses sensor
+      selector:
+        entity:
+          filter:
+            - integration: veeam_365
+              domain: sensor
+    total_sensor:
+      name: Total Licenses sensor
+      selector:
+        entity:
+          filter:
+            - integration: veeam_365
+              domain: sensor
+    threshold:
+      name: Usage threshold
+      description: Notify once this percentage of the licensed users is in use.
+      default: 90
+      selector:
+        number:
+          min: 50
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run when usage crosses the threshold. Available variables: `used`, `total`,
+        `percent_used`, `remaining`, and ready-made `title` and `message`.
+      selector:
+        action:
+    recovery_action:
+      name: Recovery action
+      description: Optional. What to run when usage drops back below the threshold.
+      default: []
+      selector:
+        action:
+
+mode: single
+
+triggers:
+  - trigger: state
+    entity_id: !input used_sensor
+  - trigger: state
+    entity_id: !input total_sensor
+
+variables:
+  used_sensor: !input used_sensor
+  total_sensor: !input total_sensor
+  threshold: !input threshold
+  used: "{{ states(used_sensor) | int(-1) }}"
+  total: "{{ states(total_sensor) | int(-1) }}"
+  # A total of zero is an unlicensed or still-loading server, not "100% used"
+  readable: "{{ used | int >= 0 and total | int > 0 }}"
+  percent_used: >-
+    {{ ((used | int / total | int) * 100) | round(1) if readable else 0 }}
+  remaining: "{{ (total | int - used | int) if readable else 0 }}"
+  over_threshold: "{{ readable and percent_used | float >= threshold | float }}"
+  # The same comparison for the state before this trigger, so the action only runs on the
+  # crossing rather than on every poll while usage stays high
+  was_over_threshold: >-
+    {% set previous = trigger.from_state.state | int(-1) if trigger.from_state else -1 %}
+    {% set previous_used = previous if trigger.entity_id == used_sensor else used | int %}
+    {% set previous_total = previous if trigger.entity_id == total_sensor else total | int %}
+    {{ previous_used >= 0 and previous_total > 0
+       and (previous_used / previous_total) * 100 >= threshold | float }}
+  title: >-
+    {{ 'Veeam 365 licenses nearly used up' if over_threshold
+       else 'Veeam 365 license usage back to normal' }}
+  message: >-
+    {{ used }} of {{ total }} licenses in use ({{ percent_used }}%),
+    {{ remaining }} remaining.
+
+conditions:
+  - condition: template
+    value_template: "{{ readable and over_threshold != was_over_threshold }}"
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ over_threshold }}"
+        sequence: !input notification_action
+      - conditions:
+          - condition: template
+            value_template: "{{ not over_threshold }}"
+        sequence: !input recovery_action

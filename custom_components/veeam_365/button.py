@@ -16,10 +16,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     API_VERSIONS,
-    CONF_API_VERSION,
-    DEFAULT_API_VERSION,
+    DEFAULT_API_MODULE,
     DOMAIN,
     check_api_feature_availability,
+    configured_api_version,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,11 +46,9 @@ async def async_setup_entry(
         if not coordinator.data:
             return
 
-        # Get the configured API version
-        api_version = entry.options.get(
-            CONF_API_VERSION,
-            entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-        )
+        # The version setup actually resolved, which is not the stored value when that is
+        # "auto"
+        api_version = configured_api_version(entry)
 
         new_entities = []
 
@@ -242,12 +240,9 @@ class VeeamRepositoryRescanButton(CoordinatorEntity, ButtonEntity):
             - Triggers coordinator.async_request_refresh() on success
         """
         try:
-            # Get the API version
-            api_version = self._config_entry.options.get(
-                CONF_API_VERSION,
-                self._config_entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-            )
-            api_module = API_VERSIONS.get(api_version, "v8")
+            # Get the API version setup resolved for this entry
+            api_version = configured_api_version(self._config_entry)
+            api_module = API_VERSIONS.get(api_version, DEFAULT_API_MODULE)
 
             # VeeamClient handles token refresh automatically - no manual check needed
 
@@ -329,11 +324,8 @@ class VeeamJobButtonBase(CoordinatorEntity, ButtonEntity):
 
     def _get_api_module(self) -> str:
         """Get the API module name based on the configured API version."""
-        api_version = self._config_entry.options.get(
-            CONF_API_VERSION,
-            self._config_entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-        )
-        return API_VERSIONS.get(api_version, "v8")
+        api_version = configured_api_version(self._config_entry)
+        return API_VERSIONS.get(api_version, DEFAULT_API_MODULE)
 
     async def _import_spec_model(self, spec_name: str):
         """Import a spec model from the veeam_365 library.
@@ -564,11 +556,8 @@ class VeeamCopyJobButtonBase(CoordinatorEntity, ButtonEntity):
 
     def _get_api_module(self) -> str:
         """Get the API module name based on the configured API version."""
-        api_version = self._config_entry.options.get(
-            CONF_API_VERSION,
-            self._config_entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION),
-        )
-        return API_VERSIONS.get(api_version, "v8")
+        api_version = configured_api_version(self._config_entry)
+        return API_VERSIONS.get(api_version, DEFAULT_API_MODULE)
 
     async def _import_spec_model(self, spec_name: str):
         """Import a spec model from the veeam_365 library.

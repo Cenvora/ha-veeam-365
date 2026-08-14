@@ -7,6 +7,8 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .const import CONF_API_VERSION, DEFAULT_API_VERSION, configured_api_version
+
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
@@ -25,6 +27,11 @@ async def async_get_config_entry_diagnostics(
             "domain": entry.domain,
             "title": entry.title,
             "unique_id": entry.unique_id,
+            # Both, because "auto" on its own answers nothing in a bug report
+            "configured_api_version": entry.options.get(
+                CONF_API_VERSION, entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
+            ),
+            "resolved_api_version": configured_api_version(entry),
         },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
