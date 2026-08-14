@@ -208,10 +208,10 @@ def test_hacs_declares_the_supported_home_assistant_version():
     hacs = json.loads((REPO / "hacs.json").read_text(encoding="utf-8"))
 
     major, minor = hacs["homeassistant"].split(".")[:2]
-    assert (int(major), int(minor)) >= (
-        2024,
-        10,
-    ), "blueprints use the plural trigger/action keys, which need 2024.10+"
+    assert (int(major), int(minor)) >= (2026, 1), (
+        "blueprints use the plural trigger/action keys, which need 2024.10+; the project "
+        "targets 2026.1+"
+    )
 
 
 def test_state_based_blueprints_survive_a_reload():

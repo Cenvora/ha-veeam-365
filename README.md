@@ -27,7 +27,7 @@ This project is an independent, open source Python client for the Veeam Backup f
 
 ## Requirements
 
-- Home Assistant 2024.10.0 or newer
+- Home Assistant 2026.1 or newer
 - Veeam Backup for Microsoft 365 server with REST API enabled (Community Edition not supported)
 
 ## Installation
