@@ -43,7 +43,6 @@ from .const import (
     PAGE_LIMIT,
     PROTECTED_COUNT_INTERVAL,
     PROTECTED_COUNT_TIMEOUT,
-    PROTECTED_PAGE_LIMIT,
     UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
 )
@@ -640,9 +639,7 @@ class _VeeamCalls:
             raise EndpointError(error_message(response))
         return response
 
-    async def _pages(
-        self, operation: str, page_limit: int = PAGE_LIMIT, **kwargs: Any
-    ) -> AsyncIterator[list[Any]]:
+    async def _pages(self, operation: str, **kwargs: Any) -> AsyncIterator[list[Any]]:
         """Each page of a collection in turn, following v8's pagination."""
         if not self.sdk.accepts(operation, "limit"):
             yield collection_items(await self._call(operation, **kwargs))
@@ -651,12 +648,12 @@ class _VeeamCalls:
         offset = 0
         seen = 0
         for _ in range(MAX_PAGES):
-            response = await self._call(operation, limit=page_limit, offset=offset, **kwargs)
+            response = await self._call(operation, limit=PAGE_LIMIT, offset=offset, **kwargs)
             page = collection_items(response)
             seen += len(page)
             yield page
             # The server may cap the page size below what was asked for, and says so
-            limit = field(response, "limit") or page_limit
+            limit = field(response, "limit") or PAGE_LIMIT
             if not page or len(page) < limit:
                 return
             offset += len(page)
@@ -996,7 +993,7 @@ class VeeamProtectedCountsCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[st
     async def _count(self, operation: str) -> dict[str, int]:
         """How many items of one kind each organization has."""
         per_organization: dict[str, int] = {}
-        async for page in self._pages(operation, page_limit=PROTECTED_PAGE_LIMIT):
+        async for page in self._pages(operation):
             for item in page:
                 org_id = id_field(item, "organization_id")
                 if org_id is not None:
