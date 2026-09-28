@@ -115,10 +115,10 @@ def test_describe_license_summarizes_for_a_log_line():
 
 def test_warning_is_raised_as_a_repair_issue_and_logged():
     """A log line alone is invisible; repairs surface in the UI."""
-    content = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+    content = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
 
-    check = content[content.index("def _check_license_support") :]
-    check = check[: check.index("async def async_setup_entry")]
+    check = content[content.index("def check_license_support") :]
+    check = check[: check.index("class VeeamCoordinator")]
 
     assert "ir.async_create_issue" in check, "should raise a repair issue"
     assert "_LOGGER.warning" in check, "should also log, for reload visibility"
@@ -127,18 +127,13 @@ def test_warning_is_raised_as_a_repair_issue_and_logged():
     assert "return False" not in check, "an unsupported license must not block setup"
 
 
-def test_license_is_checked_on_every_setup():
-    """Setup runs again on reload, which is how the warning reappears."""
-    content = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+def test_license_is_checked_on_every_poll():
+    """Re-evaluated whenever the license changes, not only at setup (see test_integration)."""
+    content = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
 
-    first_refresh = content.index("await coordinator.async_config_entry_first_refresh()")
-    check = content.index("_check_license_support(hass, entry, coordinator.data)")
-    forward = content.index("async_forward_entry_setups")
-
-    assert first_refresh < check < forward, (
-        "the check needs coordinator data, so it belongs after the first refresh and before "
-        "platforms are set up"
-    )
+    update = content[content.index("async def _async_update_data") :]
+    update = update[: update.index("def _update_license_issue")]
+    assert "self._update_license_issue(data)" in update
 
 
 def test_the_issue_is_cleared_when_the_entry_is_removed():

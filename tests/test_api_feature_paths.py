@@ -1,105 +1,51 @@
-"""Test API feature path correctness."""
+"""The operations the integration calls exist in every API version it offers.
 
-from pathlib import Path
+The buttons used to import model modules (job_start_action and friends) that exist in no
+version of veeam-365; the ImportError was swallowed and every button did nothing. These
+check the real operation modules instead, and that nothing else is looked up by name.
+"""
+
+from __future__ import annotations
+
+import importlib.util
 
 import pytest
 
+from custom_components.veeam_365 import button, sdk
+from custom_components.veeam_365.const import API_VERSIONS
 
-@pytest.fixture
-def component_path():
-    """Return the base path to the custom component."""
-    return Path(__file__).parent.parent / "custom_components" / "veeam_365"
-
-
-def test_sensor_api_feature_paths(component_path):
-    """Test that sensor.py uses correct API feature paths."""
-    sensor_path = component_path / "sensor.py"
-
-    with open(sensor_path, encoding="utf-8") as f:
-        sensor_content = f.read()
-
-    # Verify correct API module names are used (singular form)
-    assert (
-        'check_api_feature_availability(api_version, "api.job")' in sensor_content
-    ), "Jobs should use 'api.job' not 'api.jobs'"
-    assert (
-        'check_api_feature_availability(api_version, "api.copy_job")' in sensor_content
-    ), "Copy jobs should use 'api.copy_job' not 'api.copy_jobs'"
-    assert (
-        'check_api_feature_availability(api_version, "api.backup_repository")' in sensor_content
-    ), "Repositories should use 'api.backup_repository' not 'api.repositories'"
-
-    # Verify incorrect names are NOT used
-    assert (
-        'check_api_feature_availability(api_version, "api.jobs")' not in sensor_content
-    ), "Should not use plural 'api.jobs'"
-    assert (
-        'check_api_feature_availability(api_version, "api.copy_jobs")' not in sensor_content
-    ), "Should not use plural 'api.copy_jobs'"
-    assert (
-        'check_api_feature_availability(api_version, "api.repositories")' not in sensor_content
-    ), "Should not use plural 'api.repositories'"
+MODULES = sorted(API_VERSIONS.values())
 
 
-def test_button_api_feature_paths(component_path):
-    """Test that button.py uses correct API feature paths."""
-    button_path = component_path / "button.py"
-
-    with open(button_path, encoding="utf-8") as f:
-        button_content = f.read()
-
-    # Verify buttons check for API endpoint availability, not individual models
-    assert (
-        'check_api_feature_availability(api_version, "api.job")' in button_content
-    ), "Job buttons should check for 'api.job' availability"
-    assert (
-        'check_api_feature_availability(api_version, "api.copy_job")' in button_content
-    ), "Copy job buttons should check for 'api.copy_job' availability"
-    assert (
-        'check_api_feature_availability(api_version, "api.backup_repository")' in button_content
-    ), "Repository button should check for 'api.backup_repository' availability"
-
-    # Verify we're using singular API module names in code
-    assert (
-        'veeam_client.api, "job"' in button_content
-    ), "Should use singular 'job' not 'jobs' when calling veeam_client.api"
-    assert (
-        'veeam_client.api, "copy_job"' in button_content
-    ), "Should use singular 'copy_job' not 'copy_jobs' when calling veeam_client.api"
-    assert (
-        'veeam_client.api, "backup_repository"' in button_content
-    ), "Should use singular 'backup_repository' when calling veeam_client.api"
+@pytest.mark.parametrize("api_module", MODULES)
+@pytest.mark.parametrize("operation", sdk.OPERATIONS)
+def test_every_operation_exists(api_module, operation):
+    spec = importlib.util.find_spec(f"veeam_365.{api_module}.api.{operation}")
+    assert spec is not None, f"{api_module} has no {operation}"
 
 
-def test_const_api_feature_requirements(component_path):
-    """Test that const.py documents correct API feature paths."""
-    const_path = component_path / "const.py"
-
-    with open(const_path, encoding="utf-8") as f:
-        const_content = f.read()
-
-    # Verify that API_FEATURE_REQUIREMENTS uses correct module names
-    assert '"jobs_data": "api.job"' in const_content, "jobs_data should reference 'api.job'"
-    assert (
-        '"copy_jobs_data": "api.copy_job"' in const_content
-    ), "copy_jobs_data should reference 'api.copy_job'"
-    assert (
-        '"repositories_data": "api.backup_repository"' in const_content
-    ), "repositories_data should reference 'api.backup_repository'"
+@pytest.mark.parametrize(
+    "description",
+    [*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS],
+    ids=lambda description: description.operation,
+)
+def test_buttons_only_call_loaded_operations(description):
+    assert description.operation in sdk.ACTION_OPERATIONS
 
 
-def test_api_module_name_consistency(component_path):
-    """Test that API module names are consistent between __init__.py and feature checks."""
-    init_path = component_path / "__init__.py"
+@pytest.mark.parametrize("api_module", MODULES)
+def test_button_id_arguments_match_the_operations(api_module):
+    """job_* actions take job_id, copy jobs take id, repositories repository_id."""
+    loaded = sdk.load_sdk(api_module)
+    for description in (*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS):
+        assert loaded.accepts(description.operation, description.id_param), (
+            api_module,
+            description.operation,
+        )
+        if loaded.accepts(description.operation, "body"):
+            assert description.start_options, f"{description.operation} needs a body"
 
-    with open(init_path, encoding="utf-8") as f:
-        init_content = f.read()
 
-    # Verify __init__.py uses singular API module names
-    assert 'veeam_client.api, "job"' in init_content, "__init__.py should use singular 'job'"
-    assert (
-        'veeam_client.api, "copy_job"' in init_content
-    ), "__init__.py should use singular 'copy_job'"
-    assert (
-        'veeam_client.api, "backup_repository"' in init_content
-    ), "__init__.py should use singular 'backup_repository'"
+def test_only_v8_collections_are_paged():
+    assert sdk.load_sdk("v8").accepts("job.job_get", "limit")
+    assert not sdk.load_sdk("v7").accepts("job.job_get", "limit")

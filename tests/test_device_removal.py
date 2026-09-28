@@ -11,12 +11,12 @@ ast rather than importing the module.
 
 import ast
 from pathlib import Path
+import uuid
 
 import pytest
 
 COMPONENT = Path(__file__).parent.parent / "custom_components" / "veeam_365"
 INIT_PATH = COMPONENT / "__init__.py"
-SENSOR_PATH = COMPONENT / "sensor.py"
 
 ENTRY_ID = "entry-1"
 
@@ -28,7 +28,7 @@ def is_current_fixture():
     wanted = [
         node
         for node in tree.body
-        if (isinstance(node, ast.FunctionDef) and node.name == "device_is_current")
+        if (isinstance(node, ast.FunctionDef) and node.name in {"device_is_current", "_item_kind"})
         or (
             isinstance(node, ast.Assign)
             and getattr(node.targets[0], "id", "") in {"DEVICE_KINDS", "SINGLETON_KINDS", "DOMAIN"}
@@ -38,6 +38,7 @@ def is_current_fixture():
         getattr(n, "name", getattr(getattr(n, "targets", [None])[0], "id", "")) for n in wanted
     ]
     assert "device_is_current" in names, f"helper not found, got {names}"
+    assert "_item_kind" in names, f"helper not found, got {names}"
 
     namespace = {"DOMAIN": "veeam_365"}
     exec(compile(ast.Module(body=wanted, type_ignores=[]), str(INIT_PATH), "exec"), namespace)
@@ -115,6 +116,17 @@ def test_without_data_the_user_is_not_blocked(is_current, empty):
     assert is_current(ids("job_job-1"), empty, ENTRY_ID) is False
 
 
+def test_ids_parsed_as_uuids_still_match(is_current):
+    """The SDK parses IDs as uuid.UUID, which never equals the string in an identifier.
+
+    Every job device looked stale, so the Delete button would remove a live job.
+    """
+    job_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+    payload = data(jobs=[{"id": job_id, "name": "Nightly"}])
+
+    assert is_current(ids(f"job_{job_id}"), payload, ENTRY_ID) is True
+
+
 def test_missing_collections_do_not_raise(is_current):
     assert is_current(ids("job_job-1"), {"server_info": None}, ENTRY_ID) is False
 
@@ -134,24 +146,3 @@ def test_the_delete_hook_exists_with_the_name_home_assistant_looks_for():
 
     assert "device_is_current" in hook, "should refuse to delete a device that still exists"
     assert "return False" in hook and "return True" in hook
-
-
-def test_the_automatic_sweep_will_not_purge_on_an_empty_fetch():
-    """An empty list is indistinguishable from a failed fetch that degraded gracefully.
-
-    Without this, the first time the jobs endpoint errored, every job device would be deleted.
-    """
-    source = SENSOR_PATH.read_text(encoding="utf-8")
-
-    assert "prunable" in source
-    for kind in ("job", "copy job", "repository"):
-        assert f'prunable["{kind}"]' in source, f"{kind} removal should be gated"
-
-
-def test_manual_deletion_covers_what_the_sweep_deliberately_skips():
-    """The sweep no longer prunes on empty, so the manual path has to work."""
-    init_source = INIT_PATH.read_text(encoding="utf-8")
-    sensor_source = SENSOR_PATH.read_text(encoding="utf-8")
-
-    assert "async def async_remove_config_entry_device" in init_source
-    assert "Delete button" in sensor_source or "async_remove_config_entry_device" in sensor_source

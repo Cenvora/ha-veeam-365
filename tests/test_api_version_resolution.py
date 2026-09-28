@@ -14,7 +14,6 @@ import ast
 import asyncio
 import json
 from pathlib import Path
-import sys
 import types
 
 import pytest
@@ -31,7 +30,11 @@ DEFAULT = "8"
 
 
 def load_resolver(detected=None, raises=None, record=None):
-    """Load async_resolve_api_version with veeam_365.discovery stubbed out."""
+    """Load async_resolve_api_version with detection stubbed out.
+
+    The module imports detect_api_version and get_async_client at the top, so the stubs go
+    into the namespace the lifted function runs in.
+    """
     tree = ast.parse(RESOLVER_PATH.read_text(encoding="utf-8"))
     func = next(
         node
@@ -39,19 +42,14 @@ def load_resolver(detected=None, raises=None, record=None):
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "async_resolve_api_version"
     )
 
-    async def detect_api_version(base_url, *, verify_ssl=True, versions=None, **kwargs):
+    async def detect_api_version(base_url, *, verify_ssl=True, versions=None, client=None, **kw):
         if record is not None:
-            record.update(base_url=base_url, verify_ssl=verify_ssl, versions=versions)
+            record.update(
+                base_url=base_url, verify_ssl=verify_ssl, versions=versions, client=client
+            )
         if raises is not None:
             raise raises
         return detected
-
-    # The function imports veeam_365.discovery at call time
-    discovery = types.ModuleType("veeam_365.discovery")
-    discovery.detect_api_version = detect_api_version
-    veeam_365 = sys.modules.get("veeam_365") or types.ModuleType("veeam_365")
-    sys.modules["veeam_365"] = veeam_365
-    sys.modules["veeam_365.discovery"] = discovery
 
     namespace = {
         "AUTO_API_VERSION": AUTO,
@@ -66,8 +64,12 @@ def load_resolver(detected=None, raises=None, record=None):
         "display_version_for_module": lambda module: next(
             (display for display, mod in SUPPORTED.items() if mod == module), None
         ),
+        "detect_api_version": detect_api_version,
+        # Home Assistant's shared client, tagged with the verify_ssl it was asked for
+        "get_async_client": lambda hass, verify_ssl=True: ("shared-client", verify_ssl),
         "_LOGGER": types.SimpleNamespace(debug=lambda *a, **k: None, info=lambda *a, **k: None),
         "Any": object,
+        "HomeAssistant": object,
     }
     exec(
         compile(ast.Module(body=[func], type_ignores=[]), str(RESOLVER_PATH), "exec"),
@@ -83,7 +85,7 @@ def entry(**overrides):
 
 
 def resolve(resolver, data):
-    return asyncio.run(resolver(data))
+    return asyncio.run(resolver(None, data))
 
 
 def test_auto_resolves_to_the_detected_version():
@@ -112,6 +114,9 @@ def test_verify_ssl_is_passed_through():
     resolve(resolver, entry(verify_ssl=False))
 
     assert record["verify_ssl"] is False
+    # Probed through Home Assistant's shared client, not one the library would build in
+    # the event loop
+    assert record["client"] == ("shared-client", False)
 
 
 def test_undetectable_server_falls_back_to_the_default():
@@ -193,14 +198,13 @@ def test_readers_go_through_one_resolver():
     with the version the coordinator is actually using."""
     direct_read = "entry.options.get("
 
-    for name in ("button.py", "sensor.py", "diagnostics.py"):
-        source = (COMPONENT / name).read_text(encoding="utf-8")
-        assert "configured_api_version" in source, f"{name} should use the shared resolver"
+    source = (COMPONENT / "diagnostics.py").read_text(encoding="utf-8")
+    assert "configured_api_version" in source, "diagnostics should use the shared resolver"
 
-    # diagnostics reads the stored value on purpose, to report it alongside the resolved one
-    for name in ("button.py", "sensor.py"):
+    # The platforms ask the loaded SDK what exists rather than reading a version at all
+    for name in ("button.py", "sensor.py", "binary_sensor.py", "entity.py"):
         source = (COMPONENT / name).read_text(encoding="utf-8")
-        assert direct_read not in source, f"{name} still reads the stored value directly"
+        assert direct_read not in source, f"{name} reads the stored value directly"
 
 
 def test_auto_is_offered_and_is_the_default():

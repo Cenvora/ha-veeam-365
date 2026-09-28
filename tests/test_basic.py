@@ -1,5 +1,11 @@
 """Basic validation tests for Veeam 365 integration."""
 
+import json
+from pathlib import Path
+import re
+
+import pytest
+
 
 def test_manifest_valid():
     """Test that manifest.json is valid and contains required fields."""
@@ -31,6 +37,8 @@ def test_manifest_valid():
     assert manifest["domain"] == "veeam_365"
     assert manifest["config_flow"] is True
     assert "veeam-365" in manifest["requirements"][0]
+    # 0.4.1 brought the exceptions module and the session recovery this integration uses
+    assert ">=0.4.1" in manifest["requirements"][0]
 
 
 def test_strings_valid():
@@ -79,67 +87,6 @@ def test_const_domain():
     assert 'DOMAIN = "veeam_365"' in const_content
 
 
-def test_async_dependency():
-    """Test that the integration uses async methods."""
-    from pathlib import Path
-
-    # Check that the integration uses await with veeam_365 client
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    # Verify async usage - connect is wrapped in executor to avoid blocking imports
-    assert "veeam_client.connect()" in init_content, "Should call connect method"
-    assert "async_add_executor_job" in init_content, "Should use executor for blocking calls"
-    assert "await veeam_client.call(" in init_content, "Should use async call method"
-
-
-def test_config_flow_imports():
-    """Test that config flow properly imports VeeamClient."""
-    from pathlib import Path
-
-    config_flow_path = (
-        Path(__file__).parent.parent / "custom_components" / "veeam_365" / "config_flow.py"
-    )
-
-    with open(config_flow_path) as f:
-        content = f.read()
-
-    # Check that VeeamClient is imported
-    assert "from veeam_365.client import VeeamClient" in content
-
-
-def test_sensor_file_exists():
-    """Test that sensor.py exists and has proper structure."""
-    from pathlib import Path
-
-    sensor_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "sensor.py"
-
-    assert sensor_path.exists(), "sensor.py should exist"
-
-    with open(sensor_path) as f:
-        sensor_content = f.read()
-
-    # Check for basic sensor structure
-    assert "class VeeamJobSensor" in sensor_content
-    assert "SensorEntity" in sensor_content
-
-
-def test_coordinator_usage():
-    """Test that the integration uses DataUpdateCoordinator."""
-    from pathlib import Path
-
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    # Check that DataUpdateCoordinator is used
-    assert "DataUpdateCoordinator" in init_content
-    assert "coordinator" in init_content
-
-
 def test_default_port():
     """Test that default port is set to 4443 for VB365."""
     from pathlib import Path
@@ -151,44 +98,6 @@ def test_default_port():
 
     # Check that default port is 4443 (VB365 default)
     assert "DEFAULT_PORT = 4443" in const_content
-
-
-def test_api_version():
-    """Test that integration uses configurable API version with v8 default."""
-    from pathlib import Path
-
-    # Check const.py has DEFAULT_API_VERSION
-    const_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "const.py"
-
-    with open(const_path) as f:
-        const_content = f.read()
-
-    assert 'DEFAULT_API_VERSION = "v8"' in const_content
-    assert "CONF_API_VERSION" in const_content
-    assert "API_VERSIONS" in const_content
-
-    # Check config_flow uses configurable API version
-    config_flow_path = (
-        Path(__file__).parent.parent / "custom_components" / "veeam_365" / "config_flow.py"
-    )
-
-    with open(config_flow_path) as f:
-        config_flow_content = f.read()
-
-    assert "CONF_API_VERSION" in config_flow_content
-    assert "DEFAULT_API_VERSION" in config_flow_content
-    assert "API_VERSIONS" in config_flow_content
-    assert "data.get(CONF_API_VERSION, DEFAULT_API_VERSION)" in config_flow_content
-
-    # Check __init__ uses configurable API version
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    assert "CONF_API_VERSION" in init_content
-    assert "DEFAULT_API_VERSION" in init_content
-    assert "entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION)" in init_content
 
 
 def test_translation_files_exist():
@@ -213,76 +122,65 @@ def test_translation_files_exist():
         assert lang_file.exists(), f"{lang} translation should exist"
 
 
-def test_job_endpoint_usage():
-    """Test that integration uses correct job endpoint."""
-    from pathlib import Path
-
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    # Check that correct job endpoint is used
-    assert 'veeam_client.api("job").job_get' in init_content
+COMPONENT = Path(__file__).parent.parent / "custom_components" / "veeam_365"
+PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
-def test_response_results_attribute():
-    """Test that integration uses .results attribute from API response."""
-    from pathlib import Path
-
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    # Check that .results is used (not .data)
-    assert ".results" in init_content
+def _flatten(node, prefix=""):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from _flatten(value, f"{prefix}{key}.")
+    else:
+        yield prefix[:-1], node
 
 
-def test_job_attributes():
-    """Test that integration uses correct job attributes from API."""
-    from pathlib import Path
+def test_english_translation_is_strings_json():
+    strings = (COMPONENT / "strings.json").read_text(encoding="utf-8")
+    english = (COMPONENT / "translations" / "en.json").read_text(encoding="utf-8")
 
-    init_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "__init__.py"
-
-    with open(init_path) as f:
-        init_content = f.read()
-
-    # Check for correct attributes
-    assert "last_status" in init_content
-    assert "backup_type" in init_content
-    assert "is_enabled" in init_content
-    assert "total_objects" in init_content
-    assert "processed_objects" in init_content
+    assert json.loads(strings) == json.loads(english)
 
 
-def test_device_removal_on_stale_items():
-    """Test that stale devices are removed from device registry when items are deleted."""
-    from pathlib import Path
+@pytest.mark.parametrize(
+    "language", ["cs", "de", "es", "fr", "it", "nl", "pl", "pt", "ru", "zh-Hans"]
+)
+def test_translations_match_strings_json(language):
+    """A missing key shows raw in the UI; a lost placeholder renders broken."""
+    strings = dict(_flatten(json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))))
+    translated = dict(
+        _flatten(
+            json.loads(
+                (COMPONENT / "translations" / f"{language}.json").read_text(encoding="utf-8")
+            )
+        )
+    )
 
-    sensor_path = Path(__file__).parent.parent / "custom_components" / "veeam_365" / "sensor.py"
+    assert set(translated) == set(strings)
+    for key, text in strings.items():
+        assert set(PLACEHOLDER.findall(translated[key])) == set(
+            PLACEHOLDER.findall(text)
+        ), f"{language}: {key}"
 
-    with open(sensor_path) as f:
-        sensor_content = f.read()
 
-    # Check that device registry is imported
-    assert "device_registry as dr" in sensor_content, "device_registry should be imported"
+def test_every_translation_key_in_code_exists():
+    """Entities and buttons name translation keys; each must be in strings.json."""
+    from custom_components.veeam_365 import binary_sensor, button, sensor
 
-    # Check that device registry is obtained in the stale removal function
-    assert "dr.async_get(hass)" in sensor_content, "device registry should be retrieved"
+    strings = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))
+    entity = strings["entity"]
 
-    # Check that devices are looked up by their identifiers for each type
-    assert (
-        'f"job_{job_id}"' in sensor_content and "async_get_device" in sensor_content
-    ), "stale job devices should be looked up by identifier"
-    assert (
-        'f"copy_job_{copy_job_id}"' in sensor_content
-    ), "stale copy job devices should be looked up by identifier"
-    assert (
-        'f"repository_{repo_id}"' in sensor_content
-    ), "stale repository devices should be looked up by identifier"
-
-    # Check that devices are removed when found
-    assert (
-        "device_reg.async_remove_device(device.id)" in sensor_content
-    ), "stale devices should be removed from device registry"
+    for description in (
+        *sensor.JOB_SENSORS,
+        *sensor.COPY_JOB_SENSORS,
+        *sensor.REPOSITORY_SENSORS,
+        *sensor.SERVER_SENSORS,
+        *sensor.LICENSE_SENSORS,
+    ):
+        assert description.translation_key in entity["sensor"], description.translation_key
+    for description in binary_sensor.REPOSITORY_BINARY_SENSORS:
+        assert description.translation_key in entity["binary_sensor"]
+    for description in (*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS):
+        assert description.translation_key in entity["button"], description.translation_key
+        assert description.failure_key in strings["exceptions"], description.failure_key
+        message = strings["exceptions"][description.failure_key]["message"]
+        assert f"{{{description.name_placeholder}}}" in message
