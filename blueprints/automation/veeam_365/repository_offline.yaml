@@ -38,12 +38,15 @@ blueprint:
       name: Notification action
       description: >-
         What to run when a repository goes offline. Available variables: `repository_name`,
-        `repository_entity_id`, and ready-made `title` and `message`.
+        `repository_entity_id`, `is_cache_sensor` (true for a Cache In Sync sensor), and
+        ready-made `title` and `message`.
       selector:
         action:
     recovery_action:
       name: Recovery action
-      description: Optional. What to run when the repository comes back.
+      description: >-
+        Optional. What to run when the repository comes back. Only runs after an outage long
+        enough to have been reported.
       default: []
       selector:
         action:
@@ -65,24 +68,69 @@ triggers:
     id: online
 
 variables:
+  offline_for: !input offline_for
   repository_entity_id: "{{ trigger.entity_id }}"
-  # Each repository is its own device, so the device name is the repository name
+  # Accessible is a connectivity sensor; Cache In Sync (formerly "Online") has no device
+  # class. Told apart that way rather than by entity ID, which predates the rename on older
+  # installations and may have been changed by the user.
+  is_cache_sensor: >-
+    {{ trigger.to_state.attributes.device_class | default(none) != 'connectivity' }}
+  # Each repository is its own device, so the device name is the repository name. Devices are
+  # named "VB365 Repository <name>"; the prefix is left out of messages, and older unprefixed
+  # names pass through unchanged.
   repository_name: >-
-    {{ device_attr(trigger.entity_id, 'name_by_user')
-       or device_attr(trigger.entity_id, 'name')
-       or trigger.to_state.name | replace(' Accessible', '') | replace(' Cache In Sync', '') }}
+    {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+    {%- set name = device_attr(trigger.entity_id, 'name') -%}
+    {%- if by_user -%}
+      {{ by_user }}
+    {%- elif name -%}
+      {{ name | regex_replace('^VB365 (Repository )?', '') }}
+    {%- else -%}
+      {{ trigger.to_state.name | replace(' Accessible', '') | replace(' Cache In Sync', '')
+         | replace(' Online', '') }}
+    {%- endif -%}
+  # How long the sensor had been off, so that only an outage that was reported recovers
+  offline_for_seconds: >-
+    {{ ((offline_for.days | default(0) | float(0)) * 86400
+        + (offline_for.hours | default(0) | float(0)) * 3600
+        + (offline_for.minutes | default(0) | float(0)) * 60
+        + (offline_for.seconds | default(0) | float(0)))
+       if offline_for is mapping else 0 }}
+  was_offline_for: >-
+    {{ (trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds()
+       if trigger.id == 'online' else 0 }}
   title: >-
-    {{ 'Veeam 365 repository offline: ' ~ repository_name
-       if trigger.id == 'offline'
-       else 'Veeam 365 repository back online: ' ~ repository_name }}
+    {%- if is_cache_sensor -%}
+      {{ 'Veeam 365 repository cache out of sync: ' ~ repository_name
+         if trigger.id == 'offline'
+         else 'Veeam 365 repository cache back in sync: ' ~ repository_name }}
+    {%- else -%}
+      {{ 'Veeam 365 repository offline: ' ~ repository_name
+         if trigger.id == 'offline'
+         else 'Veeam 365 repository back online: ' ~ repository_name }}
+    {%- endif -%}
   message: >-
-    {{ 'Backup repository ' ~ repository_name ~ ' has been unreachable for a while. Jobs '
-       ~ 'writing to it will fail until it recovers.'
-       if trigger.id == 'offline'
-       else 'Backup repository ' ~ repository_name ~ ' is reachable again.' }}
+    {%- if is_cache_sensor -%}
+      {{ 'The local cache of object storage repository ' ~ repository_name ~ ' has been out '
+         ~ 'of sync for a while. Synchronize it from the repository device or the Veeam '
+         ~ 'console.'
+         if trigger.id == 'offline'
+         else 'The local cache of repository ' ~ repository_name ~ ' is in sync again.' }}
+    {%- else -%}
+      {{ 'Backup repository ' ~ repository_name ~ ' has been unreachable for a while. Jobs '
+         ~ 'writing to it will fail until it recovers.'
+         if trigger.id == 'offline'
+         else 'Backup repository ' ~ repository_name ~ ' is reachable again.' }}
+    {%- endif -%}
 
 # A reload takes every entity through unavailable, and both triggers pin from and to, so a
 # restart cannot re-alert.
+conditions:
+  # A blip shorter than "Offline for" raised no alert, so it gets no recovery either
+  - condition: template
+    value_template: >-
+      {{ trigger.id == 'offline'
+         or was_offline_for | float(0) >= offline_for_seconds | float(0) }}
 
 actions:
   - choose:
