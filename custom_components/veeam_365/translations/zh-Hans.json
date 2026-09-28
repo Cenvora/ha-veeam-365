@@ -166,6 +166,21 @@
       },
       "repository_immutability_days": {
         "name": "不可变天数"
+      },
+      "proxy_maintenance_mode": {
+        "name": "维护模式"
+      },
+      "proxy_cpu_usage": {
+        "name": "CPU 使用率"
+      },
+      "proxy_memory_usage": {
+        "name": "内存使用率"
+      },
+      "proxy_version": {
+        "name": "版本"
+      },
+      "proxy_operating_system": {
+        "name": "操作系统"
       }
     },
     "binary_sensor": {
@@ -192,6 +207,9 @@
       },
       "repository_accessible": {
         "name": "可访问"
+      },
+      "proxy_online": {
+        "name": "在线"
       }
     },
     "button": {

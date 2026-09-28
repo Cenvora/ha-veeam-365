@@ -40,6 +40,7 @@ READ_OPERATIONS = (
     "license_.license_get",
     "license_.license_get_auto_update",
     "backup_repository.backup_repository_get_repositories",
+    "proxy.proxy_get_proxies",
 )
 # Operations only some API versions have, keyed by the first version that has them. load_sdk
 # skips what a version lacks, and callers check has_operation before using one.

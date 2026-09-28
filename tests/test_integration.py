@@ -24,10 +24,12 @@ from .conftest import (
     ENTRY_DATA,
     JOB_ID,
     OBJECT_REPO_ID,
+    PROXY_ID,
     REPO_ID,
     FakeServer,
     health_json,
     job_json,
+    proxy_json,
 )
 
 JOB = "vb365_job_daily_mail"
@@ -630,3 +632,115 @@ async def test_older_versions_have_no_health_report(
     assert server.calls_to("health.health_get") == []
     assert "health" not in entry.runtime_data["coordinator"].data["fetch_ok"]
     assert state(hass, f"binary_sensor.{SERVER}_health_ok") == STATE_ON
+
+
+# ---------------------------------------------------------------------------
+# Proxies
+# ---------------------------------------------------------------------------
+
+PROXY = "vb365_proxy_proxy01"
+PROXIES = "proxy.proxy_get_proxies"
+
+
+async def test_proxies_get_a_device_each(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+
+    online = hass.states.get(f"binary_sensor.{PROXY}_online")
+    assert online.state == STATE_ON
+    assert online.attributes["raw_value"] == "Online"
+    assert online.attributes["fqdn"] == "proxy01.example.com"
+    assert online.attributes["roles"] == ["Processor"]
+    maintenance = hass.states.get(f"sensor.{PROXY}_maintenance_mode")
+    assert maintenance.state == "Disabled"
+    assert maintenance.attributes["raw_value"] == "Disabled"
+    assert state(hass, f"sensor.{PROXY}_cpu_usage") == "23.5"
+    assert state(hass, f"sensor.{PROXY}_memory_usage") == "61.0"
+    assert state(hass, f"sensor.{PROXY}_version") == "8.1.0.305"
+    assert state(hass, f"sensor.{PROXY}_operating_system") == "Windows"
+
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, f"proxy_{PROXY_ID}"), entry.entry_id
+    )
+    assert device is not None and device.name == "VB365 Proxy proxy01"
+    assert device.model == "Backup Proxy"
+    # v8 pages the proxies like every other collection
+    assert server.calls_to(PROXIES) == [{"limit": 100, "offset": 0}]
+
+
+async def test_maintenance_and_going_offline_follow_the_server(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.collections[PROXIES] = [
+        proxy_json(
+            status="Offline",
+            maintenanceModeState="Enabling",
+            cpuUsagePercent=None,
+            memoryUsagePercent=None,
+        )
+    ]
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"binary_sensor.{PROXY}_online") == STATE_OFF
+    assert state(hass, f"sensor.{PROXY}_maintenance_mode") == "Enabling"
+    # An offline proxy reports no usage: unknown, not zero and not unavailable
+    assert state(hass, f"sensor.{PROXY}_cpu_usage") == STATE_UNKNOWN
+    assert state(hass, f"sensor.{PROXY}_memory_usage") == STATE_UNKNOWN
+
+
+async def test_a_proxy_first_seen_offline_still_gets_its_v8_sensors(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    """Which sensors exist depends on the API version, not on what one poll reported."""
+    server.collections[PROXIES] = [{"id": PROXY_ID, "hostName": "proxy01", "status": "Offline"}]
+    entry = await setup_entry(hass)
+
+    assert state(hass, f"sensor.{PROXY}_cpu_usage") == STATE_UNKNOWN
+
+    server.collections[PROXIES] = [proxy_json()]
+    await refresh(hass, entry)
+    assert state(hass, f"sensor.{PROXY}_cpu_usage") == "23.5"
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_only_report_whether_a_proxy_is_online(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    await setup_entry(hass, api_version=version)
+
+    assert state(hass, f"binary_sensor.{PROXY}_online") == STATE_ON
+    for suffix in ("maintenance_mode", "cpu_usage", "memory_usage", "version"):
+        assert hass.states.get(f"sensor.{PROXY}_{suffix}") is None, suffix
+    # Not paged before v8
+    assert server.calls_to(PROXIES) == [{}]
+
+
+async def test_a_failing_proxies_endpoint_only_affects_proxies(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides[PROXIES] = server.error("Insufficient permissions")
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"binary_sensor.{PROXY}_online") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{PROXY}_cpu_usage") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{JOB}_last_status") == "Success"
+    assert _device(hass, f"proxy_{PROXY_ID}") is not None, "a failed fetch prunes nothing"
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.attributes["failed_endpoints"] == ["proxies"]
+
+
+async def test_a_removed_proxy_is_pruned(hass: HomeAssistant, server: FakeServer) -> None:
+    second = "88888888-8888-8888-8888-888888888888"
+    server.collections[PROXIES] = [proxy_json(), proxy_json(second, "proxy02")]
+    entry = await setup_entry(hass)
+    assert _device(hass, f"proxy_{second}") is not None
+
+    server.collections[PROXIES] = [proxy_json()]
+    await refresh(hass, entry)
+
+    assert _device(hass, f"proxy_{second}") is None
+    assert hass.states.get("binary_sensor.vb365_proxy_proxy02_online") is None
+    assert _device(hass, f"proxy_{PROXY_ID}") is not None

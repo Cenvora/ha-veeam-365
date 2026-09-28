@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfInformation, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -211,6 +211,71 @@ REPOSITORY_SENSORS: tuple[VeeamSensorDescription, ...] = (
     ),
 )
 
+
+def _maintenance_icon(proxy: dict[str, Any]) -> str:
+    return {
+        "enabled": "mdi:wrench",
+        "enabling": "mdi:wrench-clock",
+    }.get(str(proxy.get("maintenance_mode_raw") or "").lower(), "mdi:wrench-check")
+
+
+def _reports_details(proxy: dict[str, Any]) -> bool:
+    # Maintenance mode, usage, version and operating system: API v8 only
+    return bool(proxy.get("reports_details"))
+
+
+PROXY_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="maintenance_mode",
+        translation_key="proxy_maintenance_mode",
+        value_fn=lambda proxy: proxy.get("maintenance_mode"),
+        raw_key="maintenance_mode_raw",
+        icon_fn=_maintenance_icon,
+        exists_fn=_reports_details,
+    ),
+    VeeamSensorDescription(
+        key="cpu_usage",
+        translation_key="proxy_cpu_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:cpu-64-bit",
+        value_fn=lambda proxy: proxy.get("cpu_usage_percent"),
+        exists_fn=_reports_details,
+    ),
+    VeeamSensorDescription(
+        key="memory_usage",
+        translation_key="proxy_memory_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:memory",
+        value_fn=lambda proxy: proxy.get("memory_usage_percent"),
+        exists_fn=_reports_details,
+    ),
+    VeeamSensorDescription(
+        key="version",
+        translation_key="proxy_version",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:tag",
+        value_fn=lambda proxy: proxy.get("version"),
+        exists_fn=_reports_details,
+    ),
+    VeeamSensorDescription(
+        key="operating_system",
+        translation_key="proxy_operating_system",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda proxy: proxy.get("operating_system"),
+        raw_key="operating_system_raw",
+        icon_fn=lambda proxy: (
+            "mdi:linux"
+            if str(proxy.get("operating_system_raw") or "").lower() == "linux"
+            else "mdi:microsoft-windows"
+        ),
+        exists_fn=_reports_details,
+    ),
+)
+
 SERVER_SENSORS: tuple[VeeamSensorDescription, ...] = (
     VeeamSensorDescription(
         key="server_version",
@@ -331,6 +396,9 @@ async def async_setup_entry(
         _item_sensors("repositories", REPOSITORY_SENSORS),
         async_add_entities,
     )
+    async_track_items(
+        coordinator, entry, "proxies", _item_sensors("proxies", PROXY_SENSORS), async_add_entities
+    )
 
     # One server and one license per entry. The license device is created even if the
     # license could not be read on the first poll: its entities are simply unavailable until
@@ -381,7 +449,7 @@ class _DescribedSensor(SensorEntity):
 
 
 class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
-    """A sensor on a job, copy job or repository device."""
+    """A sensor on a job, copy job, repository or proxy device."""
 
     def __init__(self, coordinator, entry, key, item, description: VeeamSensorDescription):
         self.entity_description = description

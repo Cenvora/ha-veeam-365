@@ -166,6 +166,21 @@
       },
       "repository_immutability_days": {
         "name": "Дни неизменяемости"
+      },
+      "proxy_maintenance_mode": {
+        "name": "Режим обслуживания"
+      },
+      "proxy_cpu_usage": {
+        "name": "Загрузка ЦП"
+      },
+      "proxy_memory_usage": {
+        "name": "Использование памяти"
+      },
+      "proxy_version": {
+        "name": "Версия"
+      },
+      "proxy_operating_system": {
+        "name": "Операционная система"
       }
     },
     "binary_sensor": {
@@ -192,6 +207,9 @@
       },
       "repository_accessible": {
         "name": "Доступно"
+      },
+      "proxy_online": {
+        "name": "В сети"
       }
     },
     "button": {
