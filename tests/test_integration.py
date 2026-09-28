@@ -25,12 +25,14 @@ from .conftest import (
     JOB_ID,
     OBJECT_REPO_ID,
     ORG_ID,
+    OTHER_ORG_ID,
     PROXY_ID,
     REPO_ID,
     FakeServer,
     health_json,
     job_json,
     organization_json,
+    protected_json,
     proxy_json,
     sync_state_json,
 )
@@ -903,3 +905,134 @@ async def test_a_removed_organization_is_pruned(hass: HomeAssistant, server: Fak
 
     assert _device(hass, f"organization_{second}") is None
     assert _device(hass, f"organization_{ORG_ID}") is not None
+
+
+# ---------------------------------------------------------------------------
+# Protected object counts (API v8)
+# ---------------------------------------------------------------------------
+
+PROTECTED_USERS = "protected_data.protected_data_get_protected_users"
+PROTECTED_KINDS = ("users", "groups", "sites", "teams")
+
+
+async def count(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    """Run the hourly count now, as its first run in the background does after setup."""
+    await entry.runtime_data["protected_counts"].async_refresh()
+    await hass.async_block_till_done()
+
+
+async def test_protected_objects_are_counted_per_organization(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    users = hass.states.get(f"sensor.{ORG}_protected_users")
+    # The fourth user belongs to another organization
+    assert users.state == "3"
+    assert users.attributes["counted_at"] is not None
+    assert state(hass, f"sensor.{ORG}_protected_groups") == "1"
+    assert state(hass, f"sensor.{ORG}_protected_sites") == "2"
+    # Counted, and there are none: zero rather than unknown
+    assert state(hass, f"sensor.{ORG}_protected_teams") == "0"
+    # In large pages, not the regular poll's 100
+    assert server.calls_to(PROTECTED_USERS) == [{"limit": 1000, "offset": 0}]
+    assert entry.runtime_data["protected_counts"].update_interval.total_seconds() == 3600
+
+
+async def test_the_regular_poll_does_not_count(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    calls = len(server.calls_to(PROTECTED_USERS))
+
+    await refresh(hass, entry)
+    await refresh(hass, entry)
+
+    assert len(server.calls_to(PROTECTED_USERS)) == calls
+
+
+async def test_counting_follows_every_page(hass: HomeAssistant, server: FakeServer) -> None:
+    server.collections[PROTECTED_USERS] = [protected_json(i) for i in range(5)]
+    server.max_page_size = 2
+    await setup_entry(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert state(hass, f"sensor.{ORG}_protected_users") == "5"
+    assert [call["offset"] for call in server.calls_to(PROTECTED_USERS)] == [0, 2, 4]
+
+
+async def test_one_kind_failing_keeps_its_last_count(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    await count(hass, entry)
+    server.overrides[PROTECTED_USERS] = server.error("Internal error")
+    server.collections["protected_data.protected_data_get_protected_sites"] = []
+
+    await count(hass, entry)
+
+    assert state(hass, f"sensor.{ORG}_protected_users") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{ORG}_protected_sites") == "0"
+    # The last good count is kept for when it is back
+    counts = entry.runtime_data["protected_counts"].data["counts"]
+    assert counts[ORG_ID]["users"] == 3
+
+    del server.overrides[PROTECTED_USERS]
+    await count(hass, entry)
+    assert state(hass, f"sensor.{ORG}_protected_users") == "3"
+
+
+async def test_counting_failing_entirely_leaves_the_poll_alone(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    for kind in PROTECTED_KINDS:
+        server.overrides[f"protected_data.protected_data_get_protected_{kind}"] = server.error()
+    entry = await setup_entry(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.state is ConfigEntryState.LOADED
+    for kind in PROTECTED_KINDS:
+        assert state(hass, f"sensor.{ORG}_protected_{kind}") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{ORG}_licensed_users") == "250"
+    assert not entry.runtime_data["protected_counts"].last_update_success
+    assert entry.runtime_data["coordinator"].last_update_success
+
+
+async def test_an_unreachable_server_while_counting_fails_only_the_count(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    await count(hass, entry)
+    server.overrides[PROTECTED_USERS] = httpx.ConnectError("refused")
+
+    await count(hass, entry)
+
+    assert state(hass, f"sensor.{ORG}_protected_groups") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{JOB}_last_status") == "Success"
+
+
+async def test_a_new_organization_is_counted_too(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+    await count(hass, entry)
+    other = "vb365_organization_fabrikam_onmicrosoft_com"
+    server.collections[ORGANIZATIONS].append(
+        organization_json(OTHER_ORG_ID, "fabrikam.onmicrosoft.com")
+    )
+
+    await refresh(hass, entry)
+
+    # Counted on the last run already; its sensors appear with the organization
+    assert state(hass, f"sensor.{other}_protected_users") == "1"
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_count_nothing(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    server.license = {"status": "Valid", "type": "Subscription"}
+    entry = await setup_entry(hass, api_version=version)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.runtime_data["protected_counts"] is None
+    assert hass.states.get(f"sensor.{ORG}_protected_users") is None
+    assert server.calls_to(PROTECTED_USERS) == []

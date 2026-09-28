@@ -202,6 +202,18 @@
       },
       "organization_sync_status": {
         "name": "Stav synchronizace"
+      },
+      "organization_protected_users": {
+        "name": "Chránění uživatelé"
+      },
+      "organization_protected_groups": {
+        "name": "Chráněné skupiny"
+      },
+      "organization_protected_sites": {
+        "name": "Chráněné weby"
+      },
+      "organization_protected_teams": {
+        "name": "Chráněné týmy"
       }
     },
     "binary_sensor": {

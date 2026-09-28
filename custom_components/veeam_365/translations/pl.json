@@ -202,6 +202,18 @@
       },
       "organization_sync_status": {
         "name": "Stan synchronizacji"
+      },
+      "organization_protected_users": {
+        "name": "Chronieni użytkownicy"
+      },
+      "organization_protected_groups": {
+        "name": "Chronione grupy"
+      },
+      "organization_protected_sites": {
+        "name": "Chronione witryny"
+      },
+      "organization_protected_teams": {
+        "name": "Chronione zespoły"
       }
     },
     "binary_sensor": {

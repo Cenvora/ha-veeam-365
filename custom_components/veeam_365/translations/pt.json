@@ -202,6 +202,18 @@
       },
       "organization_sync_status": {
         "name": "Status da sincronização"
+      },
+      "organization_protected_users": {
+        "name": "Usuários protegidos"
+      },
+      "organization_protected_groups": {
+        "name": "Grupos protegidos"
+      },
+      "organization_protected_sites": {
+        "name": "Sites protegidos"
+      },
+      "organization_protected_teams": {
+        "name": "Equipes protegidas"
       }
     },
     "binary_sensor": {

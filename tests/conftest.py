@@ -26,6 +26,7 @@ INSTALLATION_ID = "55555555-5555-5555-5555-555555555555"
 PROXY_ID = "66666666-6666-6666-6666-666666666666"
 POOL_ID = "77777777-7777-7777-7777-777777777777"
 ORG_ID = "99999999-9999-9999-9999-999999999999"
+OTHER_ORG_ID = "13131313-1313-1313-1313-131313131313"
 
 ENTRY_DATA = {
     "host": "veeam.example.com",
@@ -189,6 +190,15 @@ def sync_state_json(org_id: str = ORG_ID, result: str = "Success", **overrides) 
     return data
 
 
+def protected_json(index: int, org_id: str = ORG_ID) -> dict:
+    """One protected user, group, site or team; counting only looks at the organization."""
+    return {
+        "id": f"{index:08d}-0000-0000-0000-000000000000",
+        "displayName": f"Object {index}",
+        "organizationId": org_id,
+    }
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -228,6 +238,22 @@ PAGE_CLASSES = {
     ),
     "proxy.proxy_get_proxies": ("RESTProxy", "PageOfRESTProxy"),
     "organization.organization_get": ("RestOrganizationComposed", "PageOfRestOrganizationComposed"),
+    "protected_data.protected_data_get_protected_users": (
+        "RESTProtectedUser",
+        "PageOfRESTProtectedUser",
+    ),
+    "protected_data.protected_data_get_protected_groups": (
+        "RESTProtectedGroup",
+        "PageOfRESTProtectedGroup",
+    ),
+    "protected_data.protected_data_get_protected_sites": (
+        "RESTProtectedSite",
+        "PageOfRESTProtectedSite",
+    ),
+    "protected_data.protected_data_get_protected_teams": (
+        "RESTProtectedTeam",
+        "PageOfRESTProtectedTeam",
+    ),
 }
 
 
@@ -246,6 +272,20 @@ class FakeServer:
             ],
             "proxy.proxy_get_proxies": [proxy_json()],
             "organization.organization_get": [organization_json()],
+            # Three users here, one in an organization that is not configured
+            "protected_data.protected_data_get_protected_users": [
+                protected_json(1),
+                protected_json(2),
+                protected_json(3),
+                protected_json(4, OTHER_ORG_ID),
+            ],
+            "protected_data.protected_data_get_protected_groups": [protected_json(5)],
+            "protected_data.protected_data_get_protected_sites": [
+                protected_json(6),
+                protected_json(7),
+            ],
+            # No teams at all
+            "protected_data.protected_data_get_protected_teams": [],
         }
         # Per organization ID
         self.licensing: dict[str, dict] = {ORG_ID: {"licensedUsers": 250, "newUsers": 3}}

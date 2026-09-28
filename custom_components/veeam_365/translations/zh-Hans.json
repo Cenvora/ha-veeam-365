@@ -202,6 +202,18 @@
       },
       "organization_sync_status": {
         "name": "同步状态"
+      },
+      "organization_protected_users": {
+        "name": "受保护的用户"
+      },
+      "organization_protected_groups": {
+        "name": "受保护的组"
+      },
+      "organization_protected_sites": {
+        "name": "受保护的网站"
+      },
+      "organization_protected_teams": {
+        "name": "受保护的团队"
       }
     },
     "binary_sensor": {

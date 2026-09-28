@@ -16,14 +16,21 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import reports_sync_progress, supports_organization_sync
+from .coordinator import (
+    PROTECTED_OPERATIONS,
+    VeeamProtectedCountsCoordinator,
+    reports_sync_progress,
+    supports_organization_sync,
+)
 from .entity import (
     OrganizationSyncMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
     VeeamServerEntity,
     async_track_items,
+    item_device_info,
 )
 
 # Coordinator-driven: nothing is polled per entity
@@ -354,6 +361,14 @@ ORGANIZATION_SYNC_PROGRESS_SENSORS: tuple[VeeamSensorDescription, ...] = (
     ),
 )
 
+# Icons for the protected object counts, by kind (see PROTECTED_OPERATIONS)
+PROTECTED_ICONS = {
+    "users": "mdi:account-lock",
+    "groups": "mdi:account-group",
+    "sites": "mdi:web",
+    "teams": "mdi:microsoft-teams",
+}
+
 SERVER_SENSORS: tuple[VeeamSensorDescription, ...] = (
     VeeamSensorDescription(
         key="server_version",
@@ -484,6 +499,10 @@ async def async_setup_entry(
     if reports_sync_progress(coordinator.sdk):
         sync_descriptions += ORGANIZATION_SYNC_PROGRESS_SENSORS
 
+    protected_counts: VeeamProtectedCountsCoordinator | None = entry.runtime_data.get(
+        "protected_counts"
+    )
+
     def organization_sensors(item: dict[str, Any]) -> list[SensorEntity]:
         entities: list[SensorEntity] = [
             VeeamItemSensor(coordinator, entry, "organizations", item, description)
@@ -493,6 +512,11 @@ async def async_setup_entry(
             VeeamOrganizationSyncSensor(coordinator, entry, "organizations", item, description)
             for description in sync_descriptions
         )
+        if protected_counts is not None:
+            entities.extend(
+                VeeamProtectedCountSensor(protected_counts, entry, item, kind)
+                for kind in PROTECTED_OPERATIONS
+            )
         return entities
 
     async_track_items(coordinator, entry, "organizations", organization_sensors, async_add_entities)
@@ -609,3 +633,50 @@ class VeeamLastSuccessfulPollSensor(VeeamServerEntity, SensorEntity):
     def native_value(self):
         diagnostics = (self.coordinator.data or {}).get("diagnostics") or {}
         return diagnostics.get("last_successful_poll")
+
+
+class VeeamProtectedCountSensor(CoordinatorEntity[VeeamProtectedCountsCoordinator], SensorEntity):
+    """How many users, groups, sites or teams an organization protects (API v8).
+
+    Fed by the hourly counts coordinator rather than the regular poll, but on the
+    organization's device, so pruning the organization removes it too. Unavailable until the
+    first count is in, and while its kind could not be counted.
+    """
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: VeeamProtectedCountsCoordinator,
+        entry: ConfigEntry,
+        item: dict[str, Any],
+        kind: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._kind = kind
+        self._org_id = str(item["id"])
+        self._attr_unique_id = f"{entry.entry_id}_organization_{self._org_id}_protected_{kind}"
+        self._attr_translation_key = f"organization_protected_{kind}"
+        self._attr_icon = PROTECTED_ICONS[kind]
+        self._attr_device_info = item_device_info("organizations", self._org_id, item.get("name"))
+
+    @property
+    def available(self) -> bool:
+        data = self.coordinator.data
+        if not super().available or not data:
+            return False
+        return bool((data.get("fetch_ok") or {}).get(self._kind))
+
+    @property
+    def native_value(self) -> int | None:
+        data = self.coordinator.data
+        if not data:
+            return None
+        # Absent means none of this kind, once the kind was counted
+        return ((data.get("counts") or {}).get(self._org_id) or {}).get(self._kind, 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        return {"counted_at": data.get("counted_at")}

@@ -123,6 +123,23 @@ async def async_get_config_entry_diagnostics(
             sync_summary[result] = sync_summary.get(result, 0) + 1
         diagnostics_data["organization_sync_summary"] = sync_summary
 
+    # Protected object totals across organizations (API v8)
+    protected_counts = entry.runtime_data.get("protected_counts")
+    if protected_counts is not None:
+        counts_data = protected_counts.data or {}
+        totals: dict[str, int] = {}
+        for org_counts in (counts_data.get("counts") or {}).values():
+            for kind, number in org_counts.items():
+                totals[kind] = totals.get(kind, 0) + number
+        diagnostics_data["protected_counts"] = {
+            "last_update_success": protected_counts.last_update_success,
+            "fetch_ok": counts_data.get("fetch_ok", {}),
+            "counted_at": (
+                counts_data["counted_at"].isoformat() if counts_data.get("counted_at") else None
+            ),
+            "totals": totals,
+        }
+
     # Add diagnostics info
     if data.get("diagnostics"):
         diagnostics_data["integration_diagnostics"] = {
