@@ -1040,7 +1040,7 @@ async def test_older_versions_count_nothing(
 
 
 # ---------------------------------------------------------------------------
-# Repository maintenance (API v8)
+# Repository maintenance (API v8, VB365 8.6 and later)
 # ---------------------------------------------------------------------------
 
 MAINTENANCE_SESSIONS = "repository_maintenance_session.repository_maintenance_sessions_get"
@@ -1050,8 +1050,14 @@ SESSION_1 = "a1a1a1a1-0000-0000-0000-000000000001"
 SESSION_2 = "a1a1a1a1-0000-0000-0000-000000000002"
 
 
+async def setup_maintenance_server(hass: HomeAssistant, server: FakeServer) -> MockConfigEntry:
+    """Set up against a VB365 8.6 server, the first to serve maintenance sessions."""
+    server.version = "8.6.0.1004"
+    return await setup_entry(hass)
+
+
 async def test_a_repository_never_in_maintenance(hass: HomeAssistant, server: FakeServer) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF
     status = hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status")
@@ -1062,7 +1068,7 @@ async def test_a_repository_never_in_maintenance(hass: HomeAssistant, server: Fa
 async def test_an_active_session_puts_its_repositories_in_maintenance(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    entry = await setup_entry(hass)
+    entry = await setup_maintenance_server(hass, server)
     server.collections[MAINTENANCE_SESSIONS] = [
         # An older, failed session on both repositories...
         maintenance_json(
@@ -1097,7 +1103,7 @@ async def test_an_active_session_wins_over_a_later_finished_one(
         maintenance_json(SESSION_1, "Preparing", "2026-09-28T08:00:00+00:00", [REPO_ID]),
         maintenance_json(SESSION_2, "Finished", "2026-09-28T09:00:00+00:00", [REPO_ID]),
     ]
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_ON
     assert state(hass, f"sensor.{LOCAL_REPO}_maintenance_status") == "Preparing"
@@ -1106,7 +1112,7 @@ async def test_an_active_session_wins_over_a_later_finished_one(
 async def test_start_maintenance_waits_rather_than_force_stopping(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     await press(hass, f"button.{LOCAL_REPO}_start_maintenance")
 
@@ -1127,7 +1133,7 @@ async def test_stop_maintenance_stops_the_active_session(
     server.collections[MAINTENANCE_SESSIONS] = [
         maintenance_json(SESSION_2, "Running", "2026-09-28T09:00:00+00:00", [REPO_ID])
     ]
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
 
@@ -1137,7 +1143,7 @@ async def test_stop_maintenance_stops_the_active_session(
 async def test_stop_maintenance_without_a_session_says_so(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     with pytest.raises(HomeAssistantError) as raised:
         await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
@@ -1152,7 +1158,7 @@ async def test_stop_maintenance_without_a_session_says_so(
 async def test_a_failing_maintenance_endpoint_only_affects_maintenance(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    entry = await setup_entry(hass)
+    entry = await setup_maintenance_server(hass, server)
     server.overrides[MAINTENANCE_SESSIONS] = server.error()
 
     await refresh(hass, entry)
@@ -1175,3 +1181,44 @@ async def test_older_versions_have_no_repository_maintenance(
     assert hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status") is None
     assert hass.states.get(f"button.{LOCAL_REPO}_start_maintenance") is None
     assert server.calls_to(MAINTENANCE_SESSIONS) == []
+
+
+@pytest.mark.parametrize("version", ["8.1.0.305", "8.5.0.2000"])
+async def test_servers_before_8_6_have_no_repository_maintenance(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    """API v8, but a server that does not serve the endpoint: not asked, and not failing."""
+    server.version = version
+    entry = await setup_entry(hass)
+    await refresh(hass, entry)
+
+    assert hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance") is None
+    assert hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status") is None
+    assert hass.states.get(f"button.{LOCAL_REPO}_start_maintenance") is None
+    assert hass.states.get(f"button.{LOCAL_REPO}_stop_maintenance") is None
+    assert server.calls_to(MAINTENANCE_SESSIONS) == []
+    assert "repository_maintenance" not in entry.runtime_data["coordinator"].data["fetch_ok"]
+    assert state(hass, f"binary_sensor.{SERVER}_health_ok") == STATE_ON
+
+
+async def test_an_unknown_server_version_counts_as_too_old(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.version = "8.6.0.1004"
+    server.overrides["service_instance.service_instance_get"] = server.error()
+    await setup_entry(hass)
+
+    assert hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance") is None
+    assert server.calls_to(MAINTENANCE_SESSIONS) == []
+
+
+async def test_the_version_is_remembered_when_server_info_later_fails(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_maintenance_server(hass, server)
+    server.overrides["service_instance.service_instance_get"] = server.error()
+
+    await refresh(hass, entry)
+
+    assert len(server.calls_to(MAINTENANCE_SESSIONS)) == 2
+    assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF

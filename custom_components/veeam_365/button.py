@@ -28,6 +28,7 @@ from .coordinator import (
     describe_error,
     error_message,
     is_error_response,
+    supports_repository_maintenance,
 )
 from .entity import VeeamItemEntity, async_track_items
 
@@ -190,7 +191,16 @@ async def async_setup_entry(
         coordinator,
         entry,
         "repositories",
-        factory("repositories", REPOSITORY_BUTTONS + REPOSITORY_MAINTENANCE_BUTTONS),
+        factory(
+            "repositories",
+            REPOSITORY_BUTTONS
+            # VB365 8.6 and later; decided once, at setup
+            + (
+                REPOSITORY_MAINTENANCE_BUTTONS
+                if supports_repository_maintenance(sdk, coordinator.server_version)
+                else ()
+            ),
+        ),
         async_add_entities,
     )
     async_track_items(

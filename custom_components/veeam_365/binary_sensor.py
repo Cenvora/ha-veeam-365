@@ -208,7 +208,10 @@ async def async_setup_entry(
 
         return factory
 
-    maintenance_supported = supports_repository_maintenance(coordinator.sdk)
+    # Decided once, at setup: a server upgraded to 8.6 gets these on the next restart
+    maintenance_supported = supports_repository_maintenance(
+        coordinator.sdk, coordinator.server_version
+    )
 
     def repository_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
         entities: list[BinarySensorEntity] = [

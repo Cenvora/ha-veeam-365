@@ -511,7 +511,10 @@ async def async_setup_entry(
         _item_sensors("copy_jobs", COPY_JOB_SENSORS),
         async_add_entities,
     )
-    maintenance_supported = supports_repository_maintenance(coordinator.sdk)
+    # Decided once, at setup: a server upgraded to 8.6 gets these on the next restart
+    maintenance_supported = supports_repository_maintenance(
+        coordinator.sdk, coordinator.server_version
+    )
 
     def repository_sensors(item: dict[str, Any]) -> list[SensorEntity]:
         entities: list[SensorEntity] = [
