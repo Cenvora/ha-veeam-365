@@ -4,7 +4,7 @@ blueprint:
     Send a once-a-day summary of your Veeam Backup for Microsoft 365 jobs: how many succeeded,
     warned or failed, and which ones need attention.
 
-    Pick the **Last Status** sensors of the jobs to include. Optionally stay quiet on days when
+    Pick the **Last Status** sensors of the jobs (and copy jobs) to include. Optionally stay quiet on days when
     everything succeeded, so the summary only arrives when it says something.
   domain: automation
   source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/daily_backup_summary.yaml
@@ -62,9 +62,12 @@ variables:
     {% for entity_id in job_status_sensors %}
       {% set status = states(entity_id) %}
       {% if status | lower in ['failed', 'warning'] %}
+        {# Devices are named "VB365 Job <name>"; the prefix is left out of the summary #}
+        {% set device_name = device_attr(entity_id, 'name') %}
         {% set ns.items = ns.items + [{
              'name': device_attr(entity_id, 'name_by_user')
-                     or device_attr(entity_id, 'name')
+                     or (device_name | regex_replace('^VB365 (Copy Job |Job )?', '')
+                         if device_name else none)
                      or entity_id,
              'status': status,
            }] %}

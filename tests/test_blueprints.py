@@ -1,7 +1,7 @@
 """Validation for the shipped automation blueprints.
 
-Home Assistant is not installed in this environment, so these tests check the things that
-actually break a blueprint in the wild and that no YAML linter would catch: an `!input` that
+These read the files without Home Assistant (test_blueprint_behaviour.py runs them) and check
+the things that actually break a blueprint in the wild and that no YAML linter would catch: an `!input` that
 was never declared, a declared input nothing uses (a UI field that does nothing), a
 `source_url` that does not match where the file really lives (which breaks the import link),
 and selectors pointing at a different integration.
@@ -162,6 +162,10 @@ def test_optional_inputs_have_defaults(path):
         "expiry_sensors",
         "used_sensor",
         "total_sensor",
+        "proxy_online_sensors",
+        "health_ok_sensors",
+        "last_backup_sensors",
+        "sync_sensors",
         "notification_action",
     }
     assert set(mandatory) <= allowed, f"unexpectedly mandatory: {sorted(set(mandatory) - allowed)}"
@@ -240,3 +244,115 @@ def test_state_triggers_that_pin_from_are_left_alone():
 
     assert 'from: "off"' in text and 'to: "on"' in text
     assert 'from: "on"' in text and 'to: "off"' in text
+
+
+# Blueprints whose binary sensor triggers must never match a trip through unavailable
+PINNED_BINARY_BLUEPRINTS = (
+    "repository_offline.yaml",
+    "proxy_offline.yaml",
+    "server_health.yaml",
+    "organization_sync_failed.yaml",
+)
+
+
+@pytest.mark.parametrize("name", PINNED_BINARY_BLUEPRINTS)
+def test_binary_sensor_triggers_pin_from_and_to(name):
+    """A reload goes on -> unavailable -> on; only a trigger pinned both ways ignores that."""
+    document = load(BLUEPRINT_DIR / name)
+
+    for entry in document["triggers"]:
+        if entry["trigger"] != "state":
+            continue
+        assert entry.get("from") in ("on", "off"), f"{entry} should pin from"
+        assert entry.get("to") in ("on", "off"), f"{entry} should pin to"
+        assert entry["from"] != entry["to"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("repository_offline.yaml", "proxy_offline.yaml", "server_health.yaml"),
+)
+def test_recovery_only_follows_a_reported_problem(name):
+    """A blip shorter than the delay raised no alert, so it must not raise a recovery."""
+    text = (BLUEPRINT_DIR / name).read_text(encoding="utf-8")
+
+    assert "trigger.from_state.last_changed" in text
+
+
+def test_job_failed_listens_to_the_integrations_session_event():
+    """The event name is the integration's; a typo would silently never trigger."""
+    const = (REPO / "custom_components" / "veeam_365" / "const.py").read_text(encoding="utf-8")
+    document = load(BLUEPRINT_DIR / "job_failed.yaml")
+
+    event_types = {
+        entry["event_type"] for entry in document["triggers"] if entry["trigger"] == "event"
+    }
+    assert event_types == {"veeam_365_job_session"}
+    assert 'EVENT_JOB_SESSION = "veeam_365_job_session"' in const
+
+
+def test_job_failed_keeps_a_status_trigger_for_servers_without_the_event_feed():
+    """The event feed is API v8 only, and can drop out; Last Status works everywhere."""
+    document = load(BLUEPRINT_DIR / "job_failed.yaml")
+
+    platforms = {entry["trigger"] for entry in document["triggers"]}
+    assert platforms == {"state", "event"}
+
+
+# Inputs of the released blueprints. Removing or renaming one breaks every automation saved
+# from the earlier version, so new behaviour has to come as new inputs with defaults.
+RELEASED_INPUTS = {
+    "job_failed.yaml": {"job_status_sensors", "include_warnings", "notification_action"},
+    "daily_backup_summary.yaml": {
+        "job_status_sensors",
+        "report_time",
+        "only_when_problems",
+        "notification_action",
+    },
+    "repository_offline.yaml": {
+        "repository_sensors",
+        "offline_for",
+        "notification_action",
+        "recovery_action",
+    },
+    "license_expiring.yaml": {
+        "expiry_sensors",
+        "days_before",
+        "check_time",
+        "notification_action",
+    },
+    "license_usage_high.yaml": {
+        "used_sensor",
+        "total_sensor",
+        "threshold",
+        "notification_action",
+        "recovery_action",
+    },
+}
+
+
+@pytest.mark.parametrize("name", sorted(RELEASED_INPUTS))
+def test_released_inputs_are_kept(name):
+    declared = set(load(BLUEPRINT_DIR / name)["blueprint"]["input"])
+
+    missing = RELEASED_INPUTS[name] - declared
+    assert not missing, f"removing {sorted(missing)} breaks saved automations"
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "job_failed.yaml",
+        "daily_backup_summary.yaml",
+        "repository_offline.yaml",
+        "proxy_offline.yaml",
+        "server_health.yaml",
+        "organization_not_backed_up.yaml",
+        "organization_sync_failed.yaml",
+    ),
+)
+def test_device_name_prefix_is_left_out_of_messages(name):
+    """Devices are named "VB365 <Kind> <name>"; "Veeam 365 job VB365 Job Daily Mail" reads badly."""
+    text = (BLUEPRINT_DIR / name).read_text(encoding="utf-8")
+
+    assert "regex_replace('^VB365 " in text

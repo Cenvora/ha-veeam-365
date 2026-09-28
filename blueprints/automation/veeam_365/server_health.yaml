@@ -1,0 +1,175 @@
+blueprint:
+  name: Veeam 365 server health problem
+  description: >-
+    Notify when a Veeam Backup for Microsoft 365 server stops answering this integration
+    properly, or reports itself unhealthy, and optionally again when it recovers.
+
+    Pick the server's **Health OK** sensor: it turns off when a poll fails or any part of it
+    (jobs, repositories, organizations, ...) could not be read, and lists those in its
+    `failed_endpoints` attribute. On API v8 you can add the **Service Health** sensor too,
+    which is the server's own verdict on its NATS server and configuration database.
+
+    A single slow poll turns Health OK off for a minute, so the problem has to last a few
+    minutes before anything is sent.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/server_health.yaml
+  author: Cenvora
+  input:
+    health_ok_sensors:
+      name: Health OK sensors
+      description: The "Health OK" sensor of one or more Veeam 365 servers.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+              device_class: running
+    service_health_sensors:
+      name: Service Health sensors
+      description: >-
+        Optional. The "Service Health" sensor of the same servers (API v8), which turns on
+        when the server reports itself Unhealthy.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+              device_class: problem
+    problem_for:
+      name: Problem for
+      description: >-
+        How long the problem must last before notifying. A single failed poll — a request
+        that timed out once, say — clears on the next one, a minute later.
+      default:
+        minutes: 5
+      selector:
+        duration:
+    notify_on_recovery:
+      name: Notify on recovery
+      description: >-
+        Run the notification action again when the server is healthy again, after a problem
+        that lasted long enough to be reported.
+      default: true
+      selector:
+        boolean:
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run. Available variables: `recovered` (false for a problem, true for a
+        recovery), `server_name`, `health_entity_id`, `failed_endpoints` (list, from Health
+        OK), `problems` (list of failing checks, from Service Health), and ready-made `title`
+        and `message`.
+      selector:
+        action:
+
+mode: queued
+max: 10
+
+triggers:
+  - trigger: state
+    entity_id: !input health_ok_sensors
+    from: "on"
+    to: "off"
+    for: !input problem_for
+    id: problem
+  - trigger: state
+    entity_id: !input service_health_sensors
+    from: "off"
+    to: "on"
+    for: !input problem_for
+    id: problem
+  - trigger: state
+    entity_id: !input health_ok_sensors
+    from: "off"
+    to: "on"
+    id: recovered
+  - trigger: state
+    entity_id: !input service_health_sensors
+    from: "on"
+    to: "off"
+    id: recovered
+
+variables:
+  problem_for: !input problem_for
+  notify_on_recovery: !input notify_on_recovery
+  recovered: "{{ trigger.id == 'recovered' }}"
+  health_entity_id: "{{ trigger.entity_id }}"
+  # Health OK is a running sensor (on is good); Service Health a problem sensor (on is bad)
+  is_service_health: >-
+    {{ trigger.to_state.attributes.device_class | default(none) == 'problem' }}
+  # The server device is named "VB365 Server <host>"; the host is what reads well
+  server_name: >-
+    {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+    {%- set name = device_attr(trigger.entity_id, 'name') -%}
+    {%- if by_user -%}
+      {{ by_user }}
+    {%- elif name -%}
+      {{ name | regex_replace('^VB365 (Server )?', '') }}
+    {%- else -%}
+      {{ trigger.to_state.name | replace(' Health OK', '') | replace(' Service Health', '') }}
+    {%- endif -%}
+  failed_endpoints: >-
+    {{ (trigger.to_state.attributes.failed_endpoints | default([], true)) | list
+       if not is_service_health else [] }}
+  problems: >-
+    {{ (trigger.to_state.attributes.problems | default([], true)) | list
+       if is_service_health else [] }}
+  # The Connected sensor on the same device says whether the server answered at all. When it
+  # did not, failed_endpoints still describes the last poll that got an answer.
+  server_unreachable: >-
+    {%- set ns = namespace(unreachable=false) -%}
+    {%- for entity_id in device_entities(device_id(trigger.entity_id)) or [] -%}
+      {%- if entity_id.startswith('binary_sensor.')
+            and state_attr(entity_id, 'device_class') == 'connectivity'
+            and is_state(entity_id, 'off') -%}
+        {%- set ns.unreachable = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.unreachable }}
+  problem_for_seconds: >-
+    {{ ((problem_for.days | default(0) | float(0)) * 86400
+        + (problem_for.hours | default(0) | float(0)) * 3600
+        + (problem_for.minutes | default(0) | float(0)) * 60
+        + (problem_for.seconds | default(0) | float(0)))
+       if problem_for is mapping else 0 }}
+  problem_lasted: >-
+    {{ (trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds()
+       if recovered else 0 }}
+  title: >-
+    {%- if recovered -%}
+      Veeam 365 server healthy again: {{ server_name }}
+    {%- elif is_service_health -%}
+      Veeam 365 server unhealthy: {{ server_name }}
+    {%- else -%}
+      Veeam 365 server health problem: {{ server_name }}
+    {%- endif -%}
+  message: >-
+    {%- if recovered -%}
+      {{ 'The server reports itself healthy again.' if is_service_health
+         else 'The integration is reading everything from the server again.' }}
+    {%- elif is_service_health -%}
+      {{ 'The server reports itself unhealthy.'
+         ~ (' Failing: ' ~ problems | join(', ') ~ '.' if problems | count > 0 else '') }}
+    {%- elif server_unreachable -%}
+      The server has not been answering for a while.
+    {%- elif failed_endpoints | count > 0 -%}
+      The server answers, but could not be read in full for a while. Failing:
+      {{ failed_endpoints | map('replace', '_', ' ') | join(', ') }}.
+    {%- else -%}
+      The integration has not been able to read the server in full for a while.
+    {%- endif -%}
+
+# A reload takes every entity through unavailable, and every trigger pins from and to, so a
+# restart cannot re-alert.
+conditions:
+  - condition: template
+    value_template: "{{ not recovered or notify_on_recovery }}"
+  # A blip shorter than "Problem for" raised no alert, so it gets no recovery either
+  - condition: template
+    value_template: >-
+      {{ not recovered or problem_lasted | float(0) >= problem_for_seconds | float(0) }}
+
+actions: !input notification_action

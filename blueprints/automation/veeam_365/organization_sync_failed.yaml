@@ -1,0 +1,100 @@
+blueprint:
+  name: Veeam 365 organization sync failed
+  description: >-
+    Notify when Veeam Backup for Microsoft 365 fails to synchronize a Microsoft 365
+    organization, and optionally when a later sync succeeds.
+
+    VB365 keeps a cache of each organization's users, groups and sites, and jobs back up
+    what that cache holds. While synchronization fails, new mailboxes, sites and teams are not
+    picked up — nothing fails outright, they are just not backed up.
+
+    Pick the **Sync** sensors of the organizations to watch (API v7 and later). They turn on
+    (Problem) when the last synchronization ended in an error.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/organization_sync_failed.yaml
+  author: Cenvora
+  input:
+    sync_sensors:
+      name: Organization Sync sensors
+      description: The "Sync" sensor of each organization to watch.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+              device_class: problem
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run when a sync fails. Available variables: `organization_name`,
+        `sync_entity_id`, `sync_error` (the server's error message, if any), `sync_type`,
+        and ready-made `title` and `message`.
+      selector:
+        action:
+    recovery_action:
+      name: Recovery action
+      description: Optional. What to run when a later sync succeeds.
+      default: []
+      selector:
+        action:
+
+mode: queued
+max: 20
+
+triggers:
+  - trigger: state
+    entity_id: !input sync_sensors
+    from: "off"
+    to: "on"
+    id: failed
+  - trigger: state
+    entity_id: !input sync_sensors
+    from: "on"
+    to: "off"
+    id: recovered
+
+variables:
+  sync_entity_id: "{{ trigger.entity_id }}"
+  # Each organization is its own device, so the device name is the organization name.
+  # Devices are named "VB365 Organization <name>"; the prefix is left out of messages, and
+  # older unprefixed names pass through unchanged.
+  organization_name: >-
+    {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+    {%- set name = device_attr(trigger.entity_id, 'name') -%}
+    {%- if by_user -%}
+      {{ by_user }}
+    {%- elif name -%}
+      {{ name | regex_replace('^VB365 (Organization )?', '') }}
+    {%- else -%}
+      {{ trigger.to_state.name | replace(' Sync', '') }}
+    {%- endif -%}
+  sync_error: "{{ trigger.to_state.attributes.error | default('', true) }}"
+  sync_type: "{{ trigger.to_state.attributes.type | default('', true) }}"
+  title: >-
+    {{ 'Veeam 365 organization sync failed: ' ~ organization_name
+       if trigger.id == 'failed'
+       else 'Veeam 365 organization sync recovered: ' ~ organization_name }}
+  message: >-
+    {%- if trigger.id == 'failed' -%}
+      {{ 'Synchronizing organization ' ~ organization_name ~ ' failed'
+         ~ ((': ' ~ sync_error ~ ('' if sync_error[-1:] in '.!?' else '.'))
+            if sync_error else '.')
+         ~ ' New users, groups and sites are not picked up for backup until it succeeds.' }}
+    {%- else -%}
+      {{ 'Organization ' ~ organization_name ~ ' synchronized successfully again.' }}
+    {%- endif -%}
+
+# A reload takes every entity through unavailable, and both triggers pin from and to, so a
+# restart cannot re-alert.
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: failed
+        sequence: !input notification_action
+      - conditions:
+          - condition: trigger
+            id: recovered
+        sequence: !input recovery_action
