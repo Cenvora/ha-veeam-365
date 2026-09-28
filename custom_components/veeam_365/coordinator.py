@@ -21,7 +21,7 @@ Error handling, in one place:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 from enum import Enum
 import logging
@@ -37,7 +37,15 @@ from homeassistant.util import dt as dt_util
 import httpx
 from veeam_365.exceptions import VeeamAuthenticationError, VeeamError, VeeamSessionError
 
-from .const import DOMAIN, MAX_PAGES, PAGE_LIMIT, UPDATE_INTERVAL, UPDATE_TIMEOUT
+from .const import (
+    DOMAIN,
+    MAX_PAGES,
+    PAGE_LIMIT,
+    PROTECTED_COUNT_INTERVAL,
+    PROTECTED_COUNT_TIMEOUT,
+    UPDATE_INTERVAL,
+    UPDATE_TIMEOUT,
+)
 from .display import humanize
 from .licensing import describe_license, unsupported_license_reason
 from .sdk import VeeamSdk
@@ -69,6 +77,20 @@ SYNC_STATE_OPERATION = "organization_sync.organization_sync_get_state"
 LICENSING_OPERATION = (
     "organization_licensing_information.organization_licensing_information_get_license_count"
 )
+
+
+# What an organization protects, by the kind reported and the operation listing it (v8)
+PROTECTED_OPERATIONS: dict[str, str] = {
+    "users": "protected_data.protected_data_get_protected_users",
+    "groups": "protected_data.protected_data_get_protected_groups",
+    "sites": "protected_data.protected_data_get_protected_sites",
+    "teams": "protected_data.protected_data_get_protected_teams",
+}
+
+
+def supports_protected_counts(sdk: VeeamSdk) -> bool:
+    """Whether this API version lists protected objects (v8)."""
+    return all(sdk.has_operation(operation) for operation in PROTECTED_OPERATIONS.values())
 
 
 def supports_organization_sync(sdk: VeeamSdk) -> bool:
@@ -602,7 +624,56 @@ def check_license_support(hass: HomeAssistant, entry: ConfigEntry, data: dict | 
     )
 
 
-class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class _VeeamCalls:
+    """Calling operations and paging through collections, shared by both coordinators."""
+
+    client: Any
+    sdk: VeeamSdk
+
+    async def _call(self, operation: str, **kwargs: Any) -> Any:
+        """Call one operation; raise EndpointError when it answers with an error."""
+        response = await self.client.call(self.sdk.operation(operation), **kwargs)
+        if response is None:
+            raise EndpointError("the server returned no data")
+        if is_error_response(response):
+            raise EndpointError(error_message(response))
+        return response
+
+    async def _pages(self, operation: str, **kwargs: Any) -> AsyncIterator[list[Any]]:
+        """Each page of a collection in turn, following v8's pagination."""
+        if not self.sdk.accepts(operation, "limit"):
+            yield collection_items(await self._call(operation, **kwargs))
+            return
+
+        offset = 0
+        seen = 0
+        for _ in range(MAX_PAGES):
+            response = await self._call(operation, limit=PAGE_LIMIT, offset=offset, **kwargs)
+            page = collection_items(response)
+            seen += len(page)
+            yield page
+            # The server may cap the page size below what was asked for, and says so
+            limit = field(response, "limit") or PAGE_LIMIT
+            if not page or len(page) < limit:
+                return
+            offset += len(page)
+
+        _LOGGER.warning(
+            "%s returned more than %d pages; showing the first %d items",
+            operation,
+            MAX_PAGES,
+            seen,
+        )
+
+    async def _fetch_collection(self, operation: str) -> list[Any]:
+        """Every item of a collection."""
+        items: list[Any] = []
+        async for page in self._pages(operation):
+            items.extend(page)
+        return items
+
+
+class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
     """Fetches everything the entities show, once a minute."""
 
     config_entry: ConfigEntry
@@ -730,40 +801,6 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # -- calls ---------------------------------------------------------------
 
-    async def _call(self, operation: str, **kwargs: Any) -> Any:
-        """Call one operation; raise EndpointError when it answers with an error."""
-        response = await self.client.call(self.sdk.operation(operation), **kwargs)
-        if response is None:
-            raise EndpointError("the server returned no data")
-        if is_error_response(response):
-            raise EndpointError(error_message(response))
-        return response
-
-    async def _fetch_collection(self, operation: str) -> list[Any]:
-        """Fetch every item of a collection, following v8's pagination."""
-        if not self.sdk.accepts(operation, "limit"):
-            return collection_items(await self._call(operation))
-
-        items: list[Any] = []
-        offset = 0
-        for _ in range(MAX_PAGES):
-            response = await self._call(operation, limit=PAGE_LIMIT, offset=offset)
-            page = collection_items(response)
-            items.extend(page)
-            # The server may cap the page size below what was asked for, and says so
-            limit = field(response, "limit") or PAGE_LIMIT
-            if not page or len(page) < limit:
-                return items
-            offset += len(page)
-
-        _LOGGER.warning(
-            "%s returned more than %d pages; showing the first %d items",
-            operation,
-            MAX_PAGES,
-            len(items),
-        )
-        return items
-
     async def _fetch_jobs(self) -> list[dict[str, Any]]:
         return parse_items("jobs", await self._fetch_collection("job.job_get"), parse_job)
 
@@ -878,3 +915,87 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise EndpointError(error_message(response))
             response = report
         return parse_health(response)
+
+
+class VeeamProtectedCountsCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
+    """Counts each organization's protected users, groups, sites and teams, hourly (v8).
+
+    Its own coordinator, so that paging through a large tenant can neither slow the regular
+    poll nor time it out. Each kind is counted on its own: one that fails keeps its last
+    counts and reads unavailable, the others carry on. Items are counted page by page and
+    not kept.
+
+    Data: ``counts`` (organization ID -> kind -> number), ``fetch_ok`` (kind -> whether it
+    was counted on the last run) and ``counted_at``. An organization with nothing of a kind
+    is simply absent from that kind's counts: zero, once the kind was counted.
+    """
+
+    config_entry: ConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: Any, sdk: VeeamSdk):
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} protected objects",
+            update_interval=timedelta(seconds=PROTECTED_COUNT_INTERVAL),
+        )
+        self.client = client
+        self.sdk = sdk
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        try:
+            async with asyncio.timeout(PROTECTED_COUNT_TIMEOUT):
+                try:
+                    return await self._count_all()
+                except VeeamSessionError as err:
+                    _LOGGER.debug("Session rejected (%s); counting once more", err)
+                    return await self._count_all()
+        except TimeoutError as err:
+            raise UpdateFailed(
+                f"Counting protected objects took longer than {PROTECTED_COUNT_TIMEOUT:.0f} "
+                "seconds"
+            ) from err
+        # Refused credentials are the regular poll's to report (it starts reauth); here
+        # they are one more reason the counts could not be refreshed
+        except (VeeamError, *TRANSPORT_ERRORS) as err:
+            raise UpdateFailed(f"Could not count protected objects: {describe_error(err)}") from err
+
+    async def _count_all(self) -> dict[str, Any]:
+        previous = self.data or {}
+        previous_counts: dict[str, dict[str, int]] = previous.get("counts") or {}
+        counts: dict[str, dict[str, int]] = {}
+        fetch_ok: dict[str, bool] = {}
+
+        for kind, operation in PROTECTED_OPERATIONS.items():
+            try:
+                per_organization = await self._count(operation)
+            except (VeeamAuthenticationError, VeeamSessionError, *TRANSPORT_ERRORS):
+                raise
+            except (EndpointError, VeeamError, *PARSE_ERRORS) as err:
+                _LOGGER.warning("Failed to count protected %s: %s", kind, describe_error(err))
+                fetch_ok[kind] = False
+                per_organization = {
+                    org_id: org_counts[kind]
+                    for org_id, org_counts in previous_counts.items()
+                    if kind in org_counts
+                }
+            else:
+                fetch_ok[kind] = True
+            for org_id, number in per_organization.items():
+                counts.setdefault(org_id, {})[kind] = number
+
+        if not any(fetch_ok.values()):
+            raise UpdateFailed("Could not count any kind of protected object")
+
+        return {"counts": counts, "fetch_ok": fetch_ok, "counted_at": dt_util.now()}
+
+    async def _count(self, operation: str) -> dict[str, int]:
+        """How many items of one kind each organization has."""
+        per_organization: dict[str, int] = {}
+        async for page in self._pages(operation):
+            for item in page:
+                org_id = id_field(item, "organization_id")
+                if org_id is not None:
+                    per_organization[org_id] = per_organization.get(org_id, 0) + 1
+        return per_organization

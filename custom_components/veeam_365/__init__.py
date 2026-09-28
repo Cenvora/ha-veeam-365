@@ -25,10 +25,12 @@ from .const import (
 )
 from .coordinator import (
     VeeamCoordinator,
+    VeeamProtectedCountsCoordinator,
     current_ids,
     describe_error,
     is_prunable,
     license_issue_id,
+    supports_protected_counts,
 )
 from .sdk import create_client, load_sdk
 
@@ -243,8 +245,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Connected to Veeam server at %s:%s", host, port)
 
     coordinator = VeeamCoordinator(hass, entry, veeam_client, sdk)
+    # Protected object counts (v8): hourly, and never in the way of setup or the regular poll
+    protected_counts = (
+        VeeamProtectedCountsCoordinator(hass, entry, veeam_client, sdk)
+        if supports_protected_counts(sdk)
+        else None
+    )
     entry.runtime_data = {
         "coordinator": coordinator,
+        "protected_counts": protected_counts,
         "veeam_client": veeam_client,
         # Platforms and entities read the resolved version from here rather than re-reading
         # the entry, which may only hold "auto"
@@ -266,6 +275,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(coordinator.async_add_listener(_prune))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if protected_counts is not None:
+        # The first count can take a while on a large tenant, so setup does not wait for it;
+        # the count sensors read unavailable until it is in
+        entry.async_create_background_task(
+            hass, protected_counts.async_refresh(), f"{DOMAIN} protected object counts"
+        )
 
     return True
 

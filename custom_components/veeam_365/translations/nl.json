@@ -202,6 +202,18 @@
       },
       "organization_sync_status": {
         "name": "Synchronisatiestatus"
+      },
+      "organization_protected_users": {
+        "name": "Beschermde gebruikers"
+      },
+      "organization_protected_groups": {
+        "name": "Beschermde groepen"
+      },
+      "organization_protected_sites": {
+        "name": "Beschermde sites"
+      },
+      "organization_protected_teams": {
+        "name": "Beschermde teams"
       }
     },
     "binary_sensor": {

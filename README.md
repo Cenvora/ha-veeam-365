@@ -225,6 +225,13 @@ starts an incremental sync as the console does. API v8 adds a Sync Status sensor
 Queued or Running, with the next scheduled sync as `next_sync`). On v8 the sync state of
 every organization comes in one request; v7 asks for each organization separately.
 
+On API v8 each organization also gets **Protected Users**, **Protected Groups**, **Protected
+Sites** and **Protected Teams** counts, with the time of the count as `counted_at`. VB365
+reports no totals, so they are counted by paging through every protected object — hourly,
+separately from the regular poll, so a large tenant can neither slow the other entities down
+nor make them unavailable. The counts appear shortly after startup, and a kind that cannot
+be counted goes unavailable while the others carry on.
+
 On the **server**: Product Version, Installation ID and Last Successful Poll sensors, and the
 Connected, Health OK and (API v8) Service Health binary sensors.
 

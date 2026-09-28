@@ -181,6 +181,11 @@ def test_every_translation_key_in_code_exists():
         *sensor.LICENSE_SENSORS,
     ):
         assert description.translation_key in entity["sensor"], description.translation_key
+    from custom_components.veeam_365.coordinator import PROTECTED_OPERATIONS
+
+    for kind in PROTECTED_OPERATIONS:
+        assert f"organization_protected_{kind}" in entity["sensor"], kind
+        assert kind in sensor.PROTECTED_ICONS, kind
     for description in (
         *binary_sensor.REPOSITORY_BINARY_SENSORS,
         *binary_sensor.PROXY_BINARY_SENSORS,
