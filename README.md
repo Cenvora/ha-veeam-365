@@ -149,11 +149,11 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
-- Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  job sessions, repositories, repository maintenance, proxies, organizations,
-  organization sync, license, server info, health report) answers with an error; the
-  `failed_endpoints` attribute says which. This is about whether the integration's polls get answers, not
-  about the server's own health — that is Service Health.
+- Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs, job
+  sessions, repositories, repository maintenance, proxies, organizations, organization sync,
+  license, server info, health report) answers with an error; the `failed_endpoints`
+  attribute says which. This is about whether the integration's polls get answers, not about
+  the server's own health — that is Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
   (`/v8/Health`) says Unhealthy. The report covers the NATS server and the PostgreSQL
   configuration database: the `checks` attribute holds each one's status and description,
