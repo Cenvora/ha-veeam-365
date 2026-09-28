@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Защищённые команды"
+      },
+      "repository_maintenance_status": {
+        "name": "Состояние обслуживания"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Синхронизация"
+      },
+      "repository_maintenance": {
+        "name": "Обслуживание"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Синхронизировать"
+      },
+      "repository_start_maintenance": {
+        "name": "Начать обслуживание"
+      },
+      "repository_stop_maintenance": {
+        "name": "Завершить обслуживание"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Не удалось синхронизировать организацию {organization_name}: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Не удалось начать обслуживание репозитория {repository_name}: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Не удалось завершить обслуживание репозитория {repository_name}: {error}"
     }
   },
   "issues": {

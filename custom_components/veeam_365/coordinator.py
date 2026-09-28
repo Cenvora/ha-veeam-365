@@ -64,6 +64,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "proxies": [],
     "organizations": [],
     "organization_sync": {},
+    "repository_maintenance": {},
     "health": None,
 }
 
@@ -87,6 +88,20 @@ PROTECTED_OPERATIONS: dict[str, str] = {
     "sites": "protected_data.protected_data_get_protected_sites",
     "teams": "protected_data.protected_data_get_protected_teams",
 }
+
+
+# Repository maintenance sessions (v8): VB365 suspends every operation on the repositories a
+# session names while it is active
+MAINTENANCE_SESSIONS_OPERATION = (
+    "repository_maintenance_session.repository_maintenance_sessions_get"
+)
+ACTIVE_MAINTENANCE_STATUSES = frozenset(
+    {"Initialized", "Preparing", "Running", "Finishing", "Canceling", "Failing"}
+)
+
+
+def supports_repository_maintenance(sdk: VeeamSdk) -> bool:
+    return sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION)
 
 
 def supports_protected_counts(sdk: VeeamSdk) -> bool:
@@ -473,6 +488,41 @@ def parse_sync_state(state: Any) -> dict[str, Any]:
     }
 
 
+def parse_maintenance_session(session: Any) -> dict[str, Any] | None:
+    session_id = id_field(session)
+    if session_id is None:
+        return None
+    status = text_field(session, "status")
+    return {
+        "session_id": session_id,
+        "status": humanize(status, "Unknown"),
+        "status_raw": status,
+        "is_active": status in ACTIVE_MAINTENANCE_STATUSES,
+        "start_time": field(session, "start_time"),
+        "end_time": field(session, "end_time"),
+        "error": text_field(session, "error_message"),
+        "repository_ids": [
+            str(repo_id) for repo_id in field(session, "repository_ids") or [] if repo_id
+        ],
+    }
+
+
+def maintenance_by_repository(sessions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each repository's session that matters: an active one, else the latest one."""
+
+    def rank(session: dict[str, Any]) -> tuple[bool, float]:
+        start = session.get("start_time")
+        return (session["is_active"], start.timestamp() if start else float("-inf"))
+
+    by_repository: dict[str, dict[str, Any]] = {}
+    for session in sessions:
+        for repo_id in session["repository_ids"]:
+            current = by_repository.get(repo_id)
+            if current is None or rank(session) > rank(current):
+                by_repository[repo_id] = session
+    return by_repository
+
+
 def parse_server_info(service_instance: Any) -> dict[str, Any]:
     return {
         "installation_id": id_field(service_instance, "installation_id"),
@@ -763,6 +813,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             fetchers["organization_sync"] = lambda: self._fetch_organization_sync(
                 data["organizations"]
             )
+        if supports_repository_maintenance(self.sdk):
+            fetchers["repository_maintenance"] = self._fetch_repository_maintenance
         if self.sdk.has_operation(HEALTH_OPERATION):
             fetchers["health"] = self._fetch_health
 
@@ -890,6 +942,14 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         if organizations and not states:
             raise EndpointError(errors[0])
         return states
+
+    async def _fetch_repository_maintenance(self) -> dict[str, dict[str, Any]]:
+        sessions = parse_items(
+            "maintenance sessions",
+            await self._fetch_collection(MAINTENANCE_SESSIONS_OPERATION),
+            parse_maintenance_session,
+        )
+        return maintenance_by_repository(sessions)
 
     async def _fetch_server_info(self) -> dict[str, Any]:
         return parse_server_info(await self._call("service_instance.service_instance_get"))

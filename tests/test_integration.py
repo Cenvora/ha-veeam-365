@@ -31,6 +31,7 @@ from .conftest import (
     FakeServer,
     health_json,
     job_json,
+    maintenance_json,
     organization_json,
     protected_json,
     proxy_json,
@@ -1036,3 +1037,141 @@ async def test_older_versions_count_nothing(
     assert entry.runtime_data["protected_counts"] is None
     assert hass.states.get(f"sensor.{ORG}_protected_users") is None
     assert server.calls_to(PROTECTED_USERS) == []
+
+
+# ---------------------------------------------------------------------------
+# Repository maintenance (API v8)
+# ---------------------------------------------------------------------------
+
+MAINTENANCE_SESSIONS = "repository_maintenance_session.repository_maintenance_sessions_get"
+START_MAINTENANCE = "repository_maintenance_session.repository_maintenance_sessions_start_action"
+STOP_MAINTENANCE = "repository_maintenance_session.repository_maintenance_sessions_stop_action"
+SESSION_1 = "a1a1a1a1-0000-0000-0000-000000000001"
+SESSION_2 = "a1a1a1a1-0000-0000-0000-000000000002"
+
+
+async def test_a_repository_never_in_maintenance(hass: HomeAssistant, server: FakeServer) -> None:
+    await setup_entry(hass)
+
+    assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF
+    status = hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status")
+    assert status.state == "Never"
+    assert status.attributes["raw_value"] is None
+
+
+async def test_an_active_session_puts_its_repositories_in_maintenance(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.collections[MAINTENANCE_SESSIONS] = [
+        # An older, failed session on both repositories...
+        maintenance_json(
+            SESSION_1,
+            "Failed",
+            "2026-09-01T10:00:00+00:00",
+            [REPO_ID, OBJECT_REPO_ID],
+            endTime="2026-09-01T10:05:00+00:00",
+            errorMessage="Repository is locked by another process.",
+        ),
+        # ...and a running one on the local repository only
+        maintenance_json(SESSION_2, "Running", "2026-09-28T09:00:00+00:00", [REPO_ID]),
+    ]
+
+    await refresh(hass, entry)
+
+    maintenance = hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance")
+    assert maintenance.state == STATE_ON
+    assert maintenance.attributes["session_id"] == SESSION_2
+    assert state(hass, f"sensor.{LOCAL_REPO}_maintenance_status") == "Running"
+    # The object repository's latest session is the failed one
+    assert state(hass, f"binary_sensor.{OBJECT_REPO}_maintenance") == STATE_OFF
+    status = hass.states.get(f"sensor.{OBJECT_REPO}_maintenance_status")
+    assert status.state == "Failed"
+    assert status.attributes["error"] == "Repository is locked by another process."
+
+
+async def test_an_active_session_wins_over_a_later_finished_one(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.collections[MAINTENANCE_SESSIONS] = [
+        maintenance_json(SESSION_1, "Preparing", "2026-09-28T08:00:00+00:00", [REPO_ID]),
+        maintenance_json(SESSION_2, "Finished", "2026-09-28T09:00:00+00:00", [REPO_ID]),
+    ]
+    await setup_entry(hass)
+
+    assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_ON
+    assert state(hass, f"sensor.{LOCAL_REPO}_maintenance_status") == "Preparing"
+
+
+async def test_start_maintenance_waits_rather_than_force_stopping(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    await setup_entry(hass)
+
+    await press(hass, f"button.{LOCAL_REPO}_start_maintenance")
+
+    (call,) = server.calls_to(START_MAINTENANCE)
+    assert call["body"].to_dict() == {
+        "repositoryIds": [REPO_ID],
+        "waitingConfig": {
+            "waitForSessionsTimeout": 60,
+            "forceStopSessions": False,
+            "forceStopSessionsTimeout": 10,
+        },
+    }
+
+
+async def test_stop_maintenance_stops_the_active_session(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.collections[MAINTENANCE_SESSIONS] = [
+        maintenance_json(SESSION_2, "Running", "2026-09-28T09:00:00+00:00", [REPO_ID])
+    ]
+    await setup_entry(hass)
+
+    await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
+
+    assert server.calls_to(STOP_MAINTENANCE) == [{"session_id": SESSION_2}]
+
+
+async def test_stop_maintenance_without_a_session_says_so(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    await setup_entry(hass)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
+
+    assert raised.value.translation_key == "repository_stop_maintenance_failed"
+    assert raised.value.translation_placeholders["error"] == (
+        "the repository is not under maintenance"
+    )
+    assert server.calls_to(STOP_MAINTENANCE) == []
+
+
+async def test_a_failing_maintenance_endpoint_only_affects_maintenance(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides[MAINTENANCE_SESSIONS] = server.error()
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{LOCAL_REPO}_maintenance_status") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{LOCAL_REPO}_used_space") != STATE_UNAVAILABLE
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.attributes["failed_endpoints"] == ["repository_maintenance"]
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_have_no_repository_maintenance(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    server.license = {"status": "Valid", "type": "Subscription"}
+    await setup_entry(hass, api_version=version)
+
+    assert hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance") is None
+    assert hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status") is None
+    assert hass.states.get(f"button.{LOCAL_REPO}_start_maintenance") is None
+    assert server.calls_to(MAINTENANCE_SESSIONS) == []

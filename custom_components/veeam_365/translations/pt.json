@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Equipes protegidas"
+      },
+      "repository_maintenance_status": {
+        "name": "Status da manutenção"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Sincronização"
+      },
+      "repository_maintenance": {
+        "name": "Manutenção"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Sincronizar"
+      },
+      "repository_start_maintenance": {
+        "name": "Iniciar manutenção"
+      },
+      "repository_stop_maintenance": {
+        "name": "Parar manutenção"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Falha ao sincronizar a organização {organization_name}: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Falha ao iniciar a manutenção do repositório {repository_name}: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Falha ao parar a manutenção do repositório {repository_name}: {error}"
     }
   },
   "issues": {

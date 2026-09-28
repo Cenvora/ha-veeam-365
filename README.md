@@ -150,8 +150,8 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  repositories, proxies, organizations, organization sync, license, server info, health
-  report) answers with an error; the `failed_endpoints` attribute says which. This is about
+  repositories, repository maintenance, proxies, organizations, organization sync,
+  license, server info, health report) answers with an error; the `failed_endpoints` attribute says which. This is about
   whether the integration's polls get answers, not about the server's own health — that is
   Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
@@ -209,6 +209,13 @@ Start, Stop, Enable and Disable buttons.
 Per **repository**: Type, Description, Used Space (GiB; local repositories report capacity
 minus free space, object storage repositories their used space) and, when immutability is
 on, Immutability Days sensors; the binary sensors above; and a Synchronize Cache button.
+On API v8 each repository also gets a **Maintenance** binary sensor (on while a maintenance
+session suspends operations on it), a Maintenance Status sensor (the current or latest
+session's status — Never, Running, Finished, Failed and so on — with its start and end time
+and any error), and **Start Maintenance** / **Stop Maintenance** buttons. Start waits up to an
+hour for the repository's running sessions to finish and is canceled if they do not; it never
+force-stops a backup in progress. Stop ends the active session, and reports it when there is
+none.
 
 Per **backup proxy**: an Online binary sensor (with the FQDN, port, roles and proxy pool as
 attributes) on every API version. API v8 adds Maintenance Mode (Disabled, Enabling or

@@ -123,6 +123,14 @@ async def async_get_config_entry_diagnostics(
             sync_summary[result] = sync_summary.get(result, 0) + 1
         diagnostics_data["organization_sync_summary"] = sync_summary
 
+    # Repository maintenance (API v8), by the status of each repository's latest session
+    if data.get("repository_maintenance"):
+        maintenance_summary: dict[str, int] = {}
+        for session in data["repository_maintenance"].values():
+            status = session.get("status_raw") or "unknown"
+            maintenance_summary[status] = maintenance_summary.get(status, 0) + 1
+        diagnostics_data["repository_maintenance_summary"] = maintenance_summary
+
     # Protected object totals across organizations (API v8)
     protected_counts = entry.runtime_data.get("protected_counts")
     if protected_counts is not None:

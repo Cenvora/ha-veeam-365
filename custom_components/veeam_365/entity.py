@@ -152,30 +152,62 @@ class VeeamItemEntity(VeeamEntity):
         return super().available and self.item is not None
 
 
-class OrganizationSyncMixin:
-    """For an entity on an organization device that shows its cache sync state.
+class ItemStateMixin:
+    """For an entity on an item's device that shows state from another endpoint.
 
-    The sync state is its own endpoint: unavailable while that fails, even though the
-    organization itself is still known. An organization the server reported no state for
-    reads unknown.
+    That endpoint (``state_key`` in the coordinator data, a dict by item ID) is fetched on its
+    own: the entity is unavailable while it fails, even though the item itself is still
+    known.
     """
 
     coordinator: VeeamCoordinator
     item_id: str
+    state_key = ""
 
     @property
-    def sync(self) -> dict[str, Any] | None:
-        states = (self.coordinator.data or {}).get("organization_sync") or {}
+    def item_state(self) -> dict[str, Any] | None:
+        states = (self.coordinator.data or {}).get(self.state_key) or {}
         return states.get(self.item_id)
 
     def _source(self) -> dict[str, Any] | None:
-        return self.sync
+        return self.item_state
 
     @property
     def available(self) -> bool:
         return super().available and fetch_succeeded(  # type: ignore[misc]
-            self.coordinator.data, "organization_sync"
+            self.coordinator.data, self.state_key
         )
+
+
+class OrganizationSyncMixin(ItemStateMixin):
+    """An organization's cache sync state. One the server reported none for reads unknown."""
+
+    state_key = "organization_sync"
+
+
+# What a repository that has never been under maintenance reads as
+NO_MAINTENANCE: dict[str, Any] = {
+    "session_id": None,
+    "status": "Never",
+    "status_raw": None,
+    "is_active": False,
+    "start_time": None,
+    "end_time": None,
+    "error": None,
+}
+
+
+class RepositoryMaintenanceMixin(ItemStateMixin):
+    """A repository's current or latest maintenance session (API v8).
+
+    A repository with no session is simply not in maintenance, so it reads that rather than
+    unknown.
+    """
+
+    state_key = "repository_maintenance"
+
+    def _source(self) -> dict[str, Any] | None:
+        return self.item_state or NO_MAINTENANCE
 
 
 def async_track_items(

@@ -199,6 +199,24 @@ def protected_json(index: int, org_id: str = ORG_ID) -> dict:
     }
 
 
+def maintenance_json(
+    session_id: str, status: str, start: str, repository_ids: list[str], **overrides
+) -> dict:
+    data = {
+        "id": session_id,
+        "status": status,
+        "startTime": start,
+        "repositoryIds": repository_ids,
+        "waitingConfig": {
+            "waitForSessionsTimeout": 60,
+            "forceStopSessions": False,
+            "forceStopSessionsTimeout": 10,
+        },
+    }
+    data.update(overrides)
+    return data
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -254,6 +272,10 @@ PAGE_CLASSES = {
         "RESTProtectedTeam",
         "PageOfRESTProtectedTeam",
     ),
+    "repository_maintenance_session.repository_maintenance_sessions_get": (
+        "RESTBackupRepositoryMaintenanceSession",
+        "PageOfRESTBackupRepositoryMaintenanceSession",
+    ),
 }
 
 
@@ -286,6 +308,8 @@ class FakeServer:
             ],
             # No teams at all
             "protected_data.protected_data_get_protected_teams": [],
+            # No repository has ever been under maintenance
+            "repository_maintenance_session.repository_maintenance_sessions_get": [],
         }
         # Per organization ID
         self.licensing: dict[str, dict] = {ORG_ID: {"licensedUsers": 250, "newUsers": 3}}

@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Équipes protégées"
+      },
+      "repository_maintenance_status": {
+        "name": "État de la maintenance"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Synchronisation"
+      },
+      "repository_maintenance": {
+        "name": "Maintenance"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Synchroniser"
+      },
+      "repository_start_maintenance": {
+        "name": "Démarrer la maintenance"
+      },
+      "repository_stop_maintenance": {
+        "name": "Arrêter la maintenance"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Échec de la synchronisation de l'organisation {organization_name} : {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Échec du démarrage de la maintenance du référentiel {repository_name} : {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Échec de l'arrêt de la maintenance du référentiel {repository_name} : {error}"
     }
   },
   "issues": {
