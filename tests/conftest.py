@@ -8,6 +8,7 @@ which answers each operation from a handler table instead of the network.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import copy
 from datetime import datetime, timedelta
@@ -379,6 +380,14 @@ class FakeServer:
         self.clients: list[FakeVeeamClient] = []
         # Server-side page size cap for v8 collections
         self.max_page_size: int | None = None
+        # The event feed (/v8/Events). Off unless a test turns it on: its listener runs for
+        # as long as the entry is loaded, which other tests have no use for.
+        self.event_feed = False
+        self._event_batches: asyncio.Queue | None = None
+        self.event_requests = 0
+        self.event_waiting = False
+        # Errors the next requests from "latest" answer with
+        self.latest_errors: list[Any] = []
 
     @property
     def sdk(self) -> VeeamSdk:
@@ -387,6 +396,50 @@ class FakeServer:
     @property
     def models(self):
         return self.sdk.models
+
+    # -- the event feed ------------------------------------------------------
+
+    @property
+    def event_batches(self) -> asyncio.Queue:
+        if self._event_batches is None:
+            self._event_batches = asyncio.Queue()
+        return self._event_batches
+
+    async def next_events(self, kwargs: dict) -> Any:
+        """Answer one feed request: from "latest" at once, otherwise when a batch is queued."""
+        self.event_requests += 1
+        if kwargs["from_"] == "latest":
+            if self.latest_errors:
+                return self.latest_errors.pop(0)
+            return self._events_page([])
+        self.event_waiting = True
+        try:
+            batch = await self.event_batches.get()
+        finally:
+            self.event_waiting = False
+        if isinstance(batch, list):
+            return self._events_page(batch)
+        return batch  # an error model or an exception
+
+    def _events_page(self, events: list[dict]) -> Any:
+        return self.models.EventsGetResponse.from_dict(
+            {"nextChangeToken": f"token-{self.event_requests}", "limit": 10000, "results": events}
+        )
+
+    async def deliver_events(self, batch: Any) -> None:
+        """Hand the listener one answer, and wait until it has dealt with it."""
+        await self.until_listening()
+        requests = self.event_requests
+        self.event_batches.put_nowait(batch)
+        await self.until_listening(after=requests)
+
+    async def until_listening(self, after: int = 0) -> None:
+        """Wait until the listener is waiting on the feed (again, after ``after`` requests)."""
+        for _ in range(500):
+            if self.event_waiting and self.event_requests > after:
+                return
+            await asyncio.sleep(0.01)
+        raise AssertionError("the event listener never came back to the feed")
 
     def calls_to(self, name: str) -> list[dict]:
         return [kwargs for called, kwargs in self.calls if called == name]
@@ -487,7 +540,10 @@ class FakeVeeamClient:
     async def call(self, fn: Callable[..., Any], **kwargs: Any) -> Any:
         name = fn.__module__.split(".api.", 1)[1]
         self.server.calls.append((name, kwargs))
-        result = self.server.answer(name, kwargs)
+        if name == "events.events_get":
+            result = await self.server.next_events(kwargs)
+        else:
+            result = self.server.answer(name, kwargs)
         if isinstance(result, BaseException):
             raise result
         return result
@@ -505,6 +561,11 @@ def server_fixture():
         server.api_module = api_module
         sdk = copy.copy(real_sdk(api_module))
         sdk.client_class = lambda **kwargs: FakeVeeamClient(server, **kwargs)
+        if not server.event_feed:
+            # As if this server had no feed, so no listener starts
+            sdk._operations = {
+                name: fn for name, fn in sdk._operations.items() if name != "events.events_get"
+            }
         return sdk
 
     with (
