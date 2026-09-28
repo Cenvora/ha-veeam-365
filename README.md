@@ -304,7 +304,9 @@ Click **Import blueprint**, then create automations from it under
 ### Backup job failed
 
 Notifies when a job's **Last Status** turns Failed (optionally Warning too). Works for backup
-jobs and backup copy jobs alike.
+jobs and backup copy jobs alike. On API v8 it also listens to the `veeam_365_job_session`
+event, which catches a job failing again right after a previous failure (Last Status stays
+Failed, so the sensor alone cannot show it); each failure is still reported once.
 
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Fjob_failed.yaml)
 
@@ -326,6 +328,47 @@ optional recovery notification.
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Frepository_offline.yaml)
 
 <sub>Source: [`repository_offline.yaml`](blueprints/automation/veeam_365/repository_offline.yaml)</sub>
+
+### Organization not backed up
+
+Fires when a Microsoft 365 organization's **Last Backup** is older than N hours (26 by
+default), and optionally as soon as its **Backed Up** sensor turns off. A job that is disabled
+or stuck never fails, so this catches what the job alert cannot. Each organization is reported
+once, with an optional notification when backups resume.
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Forganization_not_backed_up.yaml)
+
+<sub>Source: [`organization_not_backed_up.yaml`](blueprints/automation/veeam_365/organization_not_backed_up.yaml)</sub>
+
+### Organization sync failed
+
+Fires when an organization's **Sync** sensor reports that synchronizing its users, groups and
+sites failed — new ones are not backed up until it succeeds — with the server's error message
+and an optional recovery notification.
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Forganization_sync_failed.yaml)
+
+<sub>Source: [`organization_sync_failed.yaml`](blueprints/automation/veeam_365/organization_sync_failed.yaml)</sub>
+
+### Backup proxy offline
+
+Fires when a backup proxy's **Online** sensor stays off for a while, skipping proxies in
+maintenance mode, with an optional recovery notification.
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Fproxy_offline.yaml)
+
+<sub>Source: [`proxy_offline.yaml`](blueprints/automation/veeam_365/proxy_offline.yaml)</sub>
+
+### Server health problem
+
+Fires when the server's **Health OK** sensor stays off for a few minutes (5 by default, so a
+single slow poll does not count), naming the parts of the server that could not be read, and
+optionally when its **Service Health** (API v8) reports Unhealthy. Sends a recovery
+notification too, unless turned off.
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Fserver_health.yaml)
+
+<sub>Source: [`server_health.yaml`](blueprints/automation/veeam_365/server_health.yaml)</sub>
 
 ### License expiring soon
 

@@ -1,0 +1,147 @@
+blueprint:
+  name: Veeam 365 backup proxy offline
+  description: >-
+    Notify when a Veeam Backup for Microsoft 365 backup proxy goes offline, and again when it
+    comes back.
+
+    A proxy that is offline does not fail jobs immediately — jobs on other proxies carry on —
+    so this often goes unnoticed until the jobs assigned to it start failing or a restore has
+    nowhere to run.
+
+    Pick the **Online** sensors of the proxies to watch. A proxy put into maintenance mode is
+    often restarted or patched on purpose, so the blueprint can skip proxies in maintenance
+    mode.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/proxy_offline.yaml
+  author: Cenvora
+  input:
+    proxy_online_sensors:
+      name: Proxy Online sensors
+      description: One or more Veeam proxy "Online" sensors.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+              device_class: connectivity
+    offline_for:
+      name: Offline for
+      description: >-
+        How long the proxy must stay offline before notifying, so a restart of the proxy host
+        does not raise an alert.
+      default:
+        minutes: 5
+      selector:
+        duration:
+    ignore_maintenance:
+      name: Ignore proxies in maintenance mode
+      description: >-
+        Skip a proxy whose **Maintenance Mode** sensor reads Enabled or Enabling. That sensor
+        exists on API v8 only; on older versions every proxy is watched.
+      default: true
+      selector:
+        boolean:
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run when a proxy goes offline. Available variables: `proxy_name`,
+        `proxy_entity_id`, `proxy_fqdn`, and ready-made `title` and `message`.
+      selector:
+        action:
+    recovery_action:
+      name: Recovery action
+      description: >-
+        Optional. What to run when the proxy comes back online. Only runs after an outage long
+        enough to have been reported.
+      default: []
+      selector:
+        action:
+
+mode: queued
+max: 20
+
+triggers:
+  - trigger: state
+    entity_id: !input proxy_online_sensors
+    from: "on"
+    to: "off"
+    for: !input offline_for
+    id: offline
+  - trigger: state
+    entity_id: !input proxy_online_sensors
+    from: "off"
+    to: "on"
+    id: online
+
+variables:
+  offline_for: !input offline_for
+  ignore_maintenance: !input ignore_maintenance
+  proxy_entity_id: "{{ trigger.entity_id }}"
+  # Each proxy is its own device, so the device name is the proxy name. Devices are named
+  # "VB365 Proxy <host>"; the prefix is left out of messages, and older unprefixed names pass
+  # through unchanged.
+  proxy_name: >-
+    {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+    {%- set name = device_attr(trigger.entity_id, 'name') -%}
+    {%- if by_user -%}
+      {{ by_user }}
+    {%- elif name -%}
+      {{ name | regex_replace('^VB365 (Proxy )?', '') }}
+    {%- else -%}
+      {{ trigger.to_state.name | replace(' Online', '') }}
+    {%- endif -%}
+  proxy_fqdn: "{{ trigger.to_state.attributes.fqdn | default('', true) }}"
+  # The Maintenance Mode sensor lives on the same device. It is found by what it reports
+  # (its raw_value is Enabled, Enabling or Disabled) rather than by its entity ID, which the
+  # user may have renamed.
+  proxy_in_maintenance: >-
+    {%- set ns = namespace(found=false) -%}
+    {%- for entity_id in device_entities(device_id(trigger.entity_id)) or [] -%}
+      {%- if (state_attr(entity_id, 'raw_value') or '') | string | lower
+            in ['enabled', 'enabling'] -%}
+        {%- set ns.found = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.found }}
+  # How long the sensor had been off, so that only an outage that was reported recovers
+  offline_for_seconds: >-
+    {{ ((offline_for.days | default(0) | float(0)) * 86400
+        + (offline_for.hours | default(0) | float(0)) * 3600
+        + (offline_for.minutes | default(0) | float(0)) * 60
+        + (offline_for.seconds | default(0) | float(0)))
+       if offline_for is mapping else 0 }}
+  was_offline_for: >-
+    {{ (trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds()
+       if trigger.id == 'online' else 0 }}
+  title: >-
+    {{ 'Veeam 365 proxy offline: ' ~ proxy_name
+       if trigger.id == 'offline'
+       else 'Veeam 365 proxy back online: ' ~ proxy_name }}
+  message: >-
+    {{ 'Backup proxy ' ~ proxy_name ~ ' has been offline for a while. Jobs assigned to it '
+       ~ 'will fail until it is back.'
+       if trigger.id == 'offline'
+       else 'Backup proxy ' ~ proxy_name ~ ' is online again.' }}
+
+# A reload takes every entity through unavailable, and both triggers pin from/to, so a
+# restart cannot re-alert.
+conditions:
+  - condition: template
+    value_template: "{{ not (ignore_maintenance and proxy_in_maintenance) }}"
+  # A blip shorter than "Offline for" raised no alert, so it gets no recovery either
+  - condition: template
+    value_template: >-
+      {{ trigger.id == 'offline'
+         or was_offline_for | float(0) >= offline_for_seconds | float(0) }}
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: offline
+        sequence: !input notification_action
+      - conditions:
+          - condition: trigger
+            id: online
+        sequence: !input recovery_action

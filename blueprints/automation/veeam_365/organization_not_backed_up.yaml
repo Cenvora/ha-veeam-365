@@ -1,0 +1,209 @@
+blueprint:
+  name: Veeam 365 organization not backed up
+  description: >-
+    Notify when a Microsoft 365 organization has not been backed up for longer than it should
+    have been, and optionally when backups resume.
+
+    A job that is disabled, deleted or stuck does not fail — it simply stops producing
+    backups — so a failed-job alert never fires. This watches the result instead: pick the
+    **Last Backup** sensors of the organizations to watch, and optionally their **Backed Up**
+    sensors, which turn off when the server stops reporting the organization as backed up.
+
+    Checked every 15 minutes. Each organization is reported once when it goes overdue, not on
+    every check; one whose last backup is unknown (never backed up, or unavailable) is skipped.
+  domain: automation
+  source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/organization_not_backed_up.yaml
+  author: Cenvora
+  input:
+    last_backup_sensors:
+      name: Organization Last Backup sensors
+      description: The "Last Backup" sensor of each organization to watch.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: sensor
+              device_class: timestamp
+    max_age_hours:
+      name: Overdue after
+      description: >-
+        How old the last backup may be before notifying. The default allows a daily job a
+        couple of hours to run.
+      default: 26
+      selector:
+        number:
+          min: 1
+          max: 720
+          unit_of_measurement: hours
+          mode: box
+    backed_up_sensors:
+      name: Organization Backed Up sensors
+      description: >-
+        Optional. The "Backed Up" sensor of the same organizations: notifies as soon as one
+        turns off.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: veeam_365
+              domain: binary_sensor
+    notification_action:
+      name: Notification action
+      description: >-
+        What to run when organizations go overdue. Available variables: `overdue` (a list of
+        `{name, entity_id, last_backup, hours_ago}` mappings), `not_backed_up_name` (the
+        organization whose Backed Up sensor turned off, if that is what triggered), and
+        ready-made `title` and `message`.
+      selector:
+        action:
+    recovery_action:
+      name: Recovery action
+      description: >-
+        Optional. What to run when an organization that was reported overdue is backed up
+        again. Available variables: `organization_name`, `organization_entity_id`, and
+        ready-made `title` and `message`.
+      default: []
+      selector:
+        action:
+
+mode: single
+# Runs are instant, so triggers overlapping one are rare; queuing them would let a second run
+# see the automation as not yet notified and report the same organizations twice
+max_exceeded: silent
+
+triggers:
+  - trigger: time_pattern
+    minutes: /15
+    id: check
+  # Pinned from and to, so the round trip through unavailable on a reload cannot match
+  - trigger: state
+    entity_id: !input backed_up_sensors
+    from: "on"
+    to: "off"
+    id: not_backed_up
+  - trigger: state
+    entity_id: !input last_backup_sensors
+    id: backup
+
+variables:
+  last_backup_sensors: !input last_backup_sensors
+  max_age_hours: !input max_age_hours
+  max_age_seconds: "{{ max_age_hours | float(26) * 3600 }}"
+  # When this automation last notified. An organization is reported once it has been
+  # overdue since after that — so once, and still after a restart that missed the moment it
+  # went overdue. Every run reports newly overdue organizations, whatever triggered it.
+  last_notified: >-
+    {{ as_timestamp(this.attributes.last_triggered, 0)
+       if this is defined and this.attributes.last_triggered else 0 }}
+  overdue: >-
+    {% set ns = namespace(items=[]) %}
+    {% for entity_id in last_backup_sensors %}
+      {% set value = states(entity_id) %}
+      {% set last = as_timestamp(value, none)
+                    if value not in ['unknown', 'unavailable', 'none', ''] else none %}
+      {% if last is not none %}
+        {% set overdue_since = last + max_age_seconds | float %}
+        {% if overdue_since <= as_timestamp(now()) and overdue_since > last_notified | float %}
+          {% set device_name = device_attr(entity_id, 'name') %}
+          {% set ns.items = ns.items + [{
+               'name': device_attr(entity_id, 'name_by_user')
+                       or (device_name | regex_replace('^VB365 (Organization )?', '')
+                           if device_name else none)
+                       or state_attr(entity_id, 'friendly_name')
+                       or entity_id,
+               'entity_id': entity_id,
+               'last_backup': value,
+               'hours_ago': ((as_timestamp(now()) - last) / 3600) | round(0) | int,
+             }] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.items }}
+  # Devices are named "VB365 Organization <name>"; the prefix is left out of messages, and
+  # older unprefixed names pass through unchanged
+  not_backed_up_name: >-
+    {%- if trigger.id == 'not_backed_up' -%}
+      {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+      {%- set name = device_attr(trigger.entity_id, 'name') -%}
+      {%- if by_user -%}
+        {{ by_user }}
+      {%- elif name -%}
+        {{ name | regex_replace('^VB365 (Organization )?', '') }}
+      {%- else -%}
+        {{ trigger.to_state.name | replace(' Backed Up', '') }}
+      {%- endif -%}
+    {%- endif -%}
+  # A new backup of an organization that had been overdue since before the last notification
+  # (so it was reported)
+  recovered: >-
+    {%- if trigger.id != 'backup' or trigger.from_state is none
+          or trigger.to_state is none -%}
+      false
+    {%- else -%}
+      {%- set before = as_timestamp(trigger.from_state.state, none) -%}
+      {%- set after = as_timestamp(trigger.to_state.state, none) -%}
+      {{ before is not none and after is not none and after > before
+         and as_timestamp(now()) - after < max_age_seconds | float
+         and before + max_age_seconds | float <= last_notified | float
+         and before + max_age_seconds | float <= as_timestamp(trigger.to_state.last_changed) }}
+    {%- endif -%}
+  organization_entity_id: "{{ trigger.entity_id if trigger.id != 'check' else '' }}"
+  organization_name: >-
+    {%- if trigger.id == 'backup' -%}
+      {%- set by_user = device_attr(trigger.entity_id, 'name_by_user') -%}
+      {%- set name = device_attr(trigger.entity_id, 'name') -%}
+      {%- if by_user -%}
+        {{ by_user }}
+      {%- elif name -%}
+        {{ name | regex_replace('^VB365 (Organization )?', '') }}
+      {%- else -%}
+        {{ trigger.to_state.name | replace(' Last Backup', '') }}
+      {%- endif -%}
+    {%- else -%}
+      {{ not_backed_up_name }}
+    {%- endif -%}
+  should_notify: "{{ overdue | count > 0 or trigger.id == 'not_backed_up' }}"
+  title: >-
+    {%- if overdue | count == 1 and not not_backed_up_name -%}
+      Veeam 365: {{ overdue[0].name }} not backed up for {{ overdue[0].hours_ago }} hours
+    {%- elif overdue | count == 0 and not_backed_up_name -%}
+      Veeam 365: {{ not_backed_up_name }} no longer backed up
+    {%- else -%}
+      Veeam 365: {{ overdue | count + (1 if not_backed_up_name else 0) }} organizations need
+      attention
+    {%- endif -%}
+  message: >-
+    {%- set ns = namespace(lines=[]) -%}
+    {%- if not_backed_up_name -%}
+      {%- set ns.lines = ns.lines + ['The server no longer reports organization '
+                                     ~ not_backed_up_name ~ ' as backed up.'] -%}
+    {%- endif -%}
+    {%- for item in overdue -%}
+      {%- set ns.lines = ns.lines + [item.name ~ ': last backup ' ~ item.hours_ago
+                                     ~ ' hours ago ('
+                                     ~ as_timestamp(item.last_backup)
+                                       | timestamp_custom('%Y-%m-%d %H:%M') ~ ').'] -%}
+    {%- endfor -%}
+    {{ ns.lines | join('\n') }}
+
+conditions:
+  - condition: template
+    value_template: "{{ should_notify or recovered }}"
+
+actions:
+  - if:
+      - condition: template
+        value_template: "{{ should_notify }}"
+    then: !input notification_action
+  - if:
+      - condition: template
+        value_template: "{{ recovered }}"
+    then:
+      # The recovery has a title and message of its own, even when the same run also
+      # reported other organizations
+      - variables:
+          title: "Veeam 365 backups resumed: {{ organization_name }}"
+          message: "Organization {{ organization_name }} has been backed up again."
+      - sequence: !input recovery_action
