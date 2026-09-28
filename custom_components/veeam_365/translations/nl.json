@@ -13,17 +13,17 @@
           "api_version": "API-versie"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 9419)",
-          "username": "Username with administrator privileges",
-          "password": "Password for the specified user account",
-          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
-          "api_version": "Veeam REST API version to use"
+          "host": "Hostnaam of IP-adres van de Veeam Backup for Microsoft 365-server",
+          "port": "REST API-poort (standaard: 4443)",
+          "username": "Gebruikersnaam met beheerdersrechten",
+          "password": "Wachtwoord voor het opgegeven gebruikersaccount",
+          "verify_ssl": "SSL-certificaatverificatie inschakelen (alleen uitschakelen voor zelfondertekende certificaten)",
+          "api_version": "Laat op 'auto' staan om de nieuwste API-versie die deze server aanbiedt te detecteren, of kies een versie om die vast te zetten."
         }
       },
       "reconfigure": {
         "title": "Veeam Backup for Microsoft 365 opnieuw configureren",
-        "description": "Werk de configuratie van uw Veeam Backup for Microsoft 365 server bij.",
+        "description": "Werk de verbindingsgegevens voor {host} bij.",
         "data": {
           "host": "Host",
           "port": "Poort",
@@ -32,38 +32,36 @@
           "verify_ssl": "SSL-certificaat verifiëren"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port",
-          "username": "Administrator username",
-          "password": "User password",
-          "verify_ssl": "Verify SSL certificates"
+          "host": "Hostnaam of IP-adres van de Veeam Backup for Microsoft 365-server",
+          "port": "REST API-poort (standaard: 4443)",
+          "username": "Gebruikersnaam van de beheerder",
+          "password": "Gebruikerswachtwoord",
+          "verify_ssl": "SSL-certificaten verifiëren"
         }
       },
       "reauth_confirm": {
         "title": "Veeam Backup for Microsoft 365 opnieuw authenticeren",
-        "description": "De inloggegevens voor uw Veeam-server moeten worden bijgewerkt.",
+        "description": "De inloggegevens voor {host} zijn niet langer geldig. Voer nieuwe inloggegevens in.",
         "data": {
           "username": "Gebruikersnaam",
           "password": "Wachtwoord"
         },
         "data_description": {
-          "username": "Administrator username",
-          "password": "User password"
+          "username": "Gebruikersnaam van de beheerder",
+          "password": "Gebruikerswachtwoord"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbinding met Veeam-server mislukt",
       "invalid_auth": "Ongeldige authenticatiegegevens",
-      "unknown": "Er is een onverwachte fout opgetreden"
+      "unknown": "Er is een onverwachte fout opgetreden",
+      "wrong_port": "Kan op die poort geen verbinding maken, maar de Veeam REST API reageerde op poort {wrong_port}. Veeam Backup for Microsoft 365 biedt de REST API standaard aan op poort 4443; controleer de poort die in de console is geconfigureerd."
     },
     "abort": {
       "already_configured": "Deze Veeam-server is al geconfigureerd",
       "reauth_successful": "Herauthenticatie geslaagd",
-      "reconfigure_successful": "Herconfiguratie geslaagd",
-      "cannot_connect": "Verbinding met Veeam-server mislukt",
-      "invalid_auth": "Ongeldige authenticatiegegevens",
-      "unknown": "Er is een onverwachte fout opgetreden"
+      "reconfigure_successful": "Herconfiguratie geslaagd"
     }
   },
   "options": {
@@ -75,62 +73,63 @@
           "api_version": "API-versie"
         },
         "data_description": {
-          "api_version": "Select the Veeam REST API version to use for this integration"
+          "api_version": "Selecteer 'auto' om de nieuwste API-versie die deze server aanbiedt opnieuw te detecteren."
         }
       }
     },
     "error": {
       "cannot_connect": "Verbinding met Veeam Backup for Microsoft 365 server mislukt",
       "invalid_auth": "Ongeldige authenticatiegegevens",
-      "unknown": "Er is een onverwachte fout opgetreden"
+      "unknown": "Er is een onverwachte fout opgetreden",
+      "wrong_port": "Kan op die poort geen verbinding maken, maar de Veeam REST API reageerde op poort {wrong_port}. Veeam Backup for Microsoft 365 biedt de REST API standaard aan op poort 4443; controleer de poort die in de console is geconfigureerd."
     }
   },
   "entity": {
     "sensor": {
       "job_name": {
-        "name": "Name"
+        "name": "Naam"
       },
       "job_backup_type": {
-        "name": "Backup Type"
+        "name": "Back-uptype"
       },
       "job_last_run": {
-        "name": "Last Run"
+        "name": "Laatste uitvoering"
       },
       "job_next_run": {
-        "name": "Next Run"
+        "name": "Volgende uitvoering"
       },
       "job_last_backup": {
-        "name": "Last Backup"
+        "name": "Laatste back-up"
       },
       "job_is_enabled": {
-        "name": "Enabled"
+        "name": "Ingeschakeld"
       },
       "job_last_status": {
-        "name": "Last Status"
+        "name": "Laatste status"
       },
       "copy_job_name": {
-        "name": "Name"
+        "name": "Naam"
       },
       "copy_job_last_run": {
-        "name": "Last Run"
+        "name": "Laatste uitvoering"
       },
       "copy_job_last_backup": {
-        "name": "Last Backup"
+        "name": "Laatste back-up"
       },
       "copy_job_is_enabled": {
-        "name": "Enabled"
+        "name": "Ingeschakeld"
       },
       "copy_job_last_status": {
-        "name": "Last Status"
+        "name": "Laatste status"
       },
       "server_version": {
-        "name": "Product Version"
+        "name": "Productversie"
       },
       "server_installation_id": {
-        "name": "Installation ID"
+        "name": "Installatie-ID"
       },
       "server_last_successful_poll": {
-        "name": "Last Successful Poll"
+        "name": "Laatste geslaagde poll"
       },
       "license_status": {
         "name": "Status"
@@ -139,133 +138,128 @@
         "name": "Type"
       },
       "license_expiration": {
-        "name": "Expiration Date"
+        "name": "Vervaldatum"
       },
       "license_grace_period_expires": {
-        "name": "Grace Period Expiration"
+        "name": "Einde respijtperiode"
       },
       "license_licensed_to": {
-        "name": "Licensed To"
+        "name": "Gelicentieerd aan"
       },
       "license_total_number": {
-        "name": "Total Licenses"
+        "name": "Totaal aantal licenties"
       },
       "license_used_number": {
-        "name": "Used Licenses"
+        "name": "Gebruikte licenties"
       },
       "license_new_number": {
-        "name": "New Licenses"
-      },
-      "license_auto_update": {
-        "name": "Auto Update Enabled"
+        "name": "Nieuwe licenties"
       },
       "repository_type": {
         "name": "Type"
       },
       "repository_description": {
-        "name": "Description"
+        "name": "Beschrijving"
       },
       "repository_used_space": {
-        "name": "Used Space"
+        "name": "Gebruikte ruimte"
       },
       "repository_immutability_days": {
-        "name": "Immutability Days"
+        "name": "Onveranderbaarheidsdagen"
       }
     },
     "binary_sensor": {
       "server_health_ok": {
-        "name": "Health OK"
+        "name": "Gezondheid OK"
       },
       "server_connected": {
-        "name": "Connected"
+        "name": "Verbonden"
       },
-      "repository_online": {
-        "name": "Online"
+      "license_auto_update": {
+        "name": "Automatisch bijwerken ingeschakeld"
+      },
+      "repository_cache_in_sync": {
+        "name": "Cache gesynchroniseerd"
       },
       "repository_out_of_date": {
-        "name": "Out of Date"
+        "name": "Verouderd"
       },
       "repository_immutable": {
-        "name": "Immutable"
+        "name": "Onveranderbaar"
       },
       "repository_accessible": {
-        "name": "Accessible"
+        "name": "Toegankelijk"
       }
     },
     "button": {
       "repository_rescan": {
-        "name": "Synchronize Cache"
+        "name": "Cache synchroniseren"
       },
       "job_start": {
-        "name": "Start"
+        "name": "Starten"
       },
       "job_stop": {
-        "name": "Stop"
+        "name": "Stoppen"
       },
       "job_enable": {
-        "name": "Enable"
+        "name": "Inschakelen"
       },
       "job_disable": {
-        "name": "Disable"
+        "name": "Uitschakelen"
+      },
+      "copy_job_start": {
+        "name": "Starten"
+      },
+      "copy_job_stop": {
+        "name": "Stoppen"
+      },
+      "copy_job_enable": {
+        "name": "Inschakelen"
+      },
+      "copy_job_disable": {
+        "name": "Uitschakelen"
       }
     }
   },
   "exceptions": {
     "connection_error": {
-      "message": "Failed to connect to Veeam server at {host}:{port}"
+      "message": "Kan geen verbinding maken met de Veeam-server op {host}:{port}: {error}"
     },
     "authentication_failed": {
-      "message": "Authentication failed for user {username}"
-    },
-    "api_error": {
-      "message": "Veeam API error: {error}"
+      "message": "De Veeam-server heeft de inloggegevens voor gebruiker {username} geweigerd"
     },
     "repository_rescan_failed": {
-      "message": "Failed to rescan repository {repository_name}: {error}"
+      "message": "Synchroniseren van repository {repository_name} mislukt: {error}"
     },
     "job_start_failed": {
-      "message": "Failed to start job {job_name}: {error}"
+      "message": "Starten van taak {job_name} mislukt: {error}"
     },
     "job_stop_failed": {
-      "message": "Failed to stop job {job_name}: {error}"
+      "message": "Stoppen van taak {job_name} mislukt: {error}"
     },
     "job_enable_failed": {
-      "message": "Failed to enable job {job_name}: {error}"
+      "message": "Inschakelen van taak {job_name} mislukt: {error}"
     },
     "job_disable_failed": {
-      "message": "Failed to disable job {job_name}: {error}"
+      "message": "Uitschakelen van taak {job_name} mislukt: {error}"
     },
-    "timeout_error": {
-      "message": "Request to Veeam server timed out"
+    "copy_job_start_failed": {
+      "message": "Starten van kopieertaak {job_name} mislukt: {error}"
     },
-    "invalid_response": {
-      "message": "Received invalid response from Veeam server"
+    "copy_job_stop_failed": {
+      "message": "Stoppen van kopieertaak {job_name} mislukt: {error}"
+    },
+    "copy_job_enable_failed": {
+      "message": "Inschakelen van kopieertaak {job_name} mislukt: {error}"
+    },
+    "copy_job_disable_failed": {
+      "message": "Uitschakelen van kopieertaak {job_name} mislukt: {error}"
     }
   },
-  "selector": {
-    "job_status": {
-      "options": {
-        "success": "Success",
-        "running": "Running",
-        "failed": "Failed",
-        "warning": "Warning",
-        "unknown": "Unknown"
-      }
-    },
-    "job_last_result": {
-      "options": {
-        "success": "Success",
-        "failed": "Failed",
-        "warning": "Warning",
-        "none": "None"
-      }
-    },
-    "license_status": {
-      "options": {
-        "valid": "Valid",
-        "expired": "Expired",
-        "invalid": "Invalid"
-      }
+  "issues": {
+    "unsupported_license": {
+      "title": "Niet-ondersteunde Veeam-licentie op {host}",
+      "description": "De Veeam Backup for Microsoft 365-server op **{host}** meldt de licentie **{license}**.\n\nCommunity Edition, en servers waarvan de licentie niet kan worden gelezen, worden niet ondersteund door deze integratie: de rechten verschillen en sommige REST API-endpoints reageren anders of helemaal niet, waardoor entiteiten kunnen ontbreken of onbetrouwbaar kunnen zijn.\n\nDe integratie blijft werken — er wordt niets geblokkeerd. Vermeld dit licentietype in uw bugrapport als u problemen ondervindt. Installeer een ondersteunde licentie, of verwijder de integratie, om deze waarschuwing te laten verdwijnen."
     }
   }
 }
