@@ -12,22 +12,27 @@ one upgrade moves them rather than leaving two of everything.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
+from typing import Any
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+    BinarySensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, check_api_feature_availability, configured_api_version
-from .sensor import VeeamLicenseMixin, VeeamRepositoryMixin
+from .entity import VeeamItemEntity, VeeamLicenseEntity, VeeamServerEntity, async_track_items
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 1
+# Coordinator-driven: nothing is polled per entity
+PARALLEL_UPDATES = 0
 
 
 def _drop_superseded_sensor_entities(hass: HomeAssistant, entry: ConfigEntry, entities) -> None:
@@ -51,6 +56,57 @@ def _drop_superseded_sensor_entities(hass: HomeAssistant, entry: ConfigEntry, en
         registry.async_remove(existing.entity_id)
 
 
+@dataclass(frozen=True, kw_only=True)
+class VeeamRepositoryBinaryDescription(BinarySensorEntityDescription):
+    """A repository flag. ``key`` is the unique ID suffix — never change it."""
+
+    value_key: str
+    icon_on: str
+    icon_off: str
+
+
+# The unique ID suffixes are historical: "online" reported is_out_of_sync all along, so it
+# keeps its ID (and history) under the name that says what it is.
+REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
+    VeeamRepositoryBinaryDescription(
+        key="online",
+        translation_key="repository_cache_in_sync",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="is_cache_in_sync",
+        icon_on="mdi:sync",
+        icon_off="mdi:sync-alert",
+    ),
+    VeeamRepositoryBinaryDescription(
+        key="out_of_date",
+        translation_key="repository_out_of_date",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="is_outdated",
+        icon_on="mdi:alert-octagon",
+        icon_off="mdi:check-decagram",
+    ),
+    # No device class: immutability being off is a configuration choice, not a problem,
+    # and PROBLEM would colour it red
+    VeeamRepositoryBinaryDescription(
+        key="immutable",
+        translation_key="repository_immutable",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="is_immutable",
+        icon_on="mdi:lock",
+        icon_off="mdi:lock-open",
+    ),
+    VeeamRepositoryBinaryDescription(
+        key="accessible",
+        translation_key="repository_accessible",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="is_accessible",
+        icon_on="mdi:folder-open",
+        icon_off="mdi:folder-lock",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -59,61 +115,25 @@ async def async_setup_entry(
     """Set up the Veeam binary sensors."""
     coordinator = entry.runtime_data["coordinator"]
 
-    added_repository_ids: set[str] = set()
-    server_added = False
-    license_added = False
+    def add(entities: list[BinarySensorEntity]) -> None:
+        _drop_superseded_sensor_entities(hass, entry, entities)
+        async_add_entities(entities)
 
-    @callback
-    def _sync_entities() -> None:
-        nonlocal server_added
-        nonlocal license_added
+    def repository_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
+        return [
+            VeeamRepositoryBinarySensor(coordinator, entry, item, description)
+            for description in REPOSITORY_BINARY_SENSORS
+        ]
 
-        if not coordinator.data:
-            return
+    async_track_items(coordinator, entry, "repositories", repository_sensors, add)
 
-        api_version = configured_api_version(entry)
-        new_entities: list[BinarySensorEntity] = []
-
-        if check_api_feature_availability(api_version, "api.backup_repository"):
-            for repository in coordinator.data.get("repositories", []):
-                repo_id = repository.get("id")
-                if not repo_id or repo_id in added_repository_ids:
-                    continue
-
-                new_entities.extend(
-                    [
-                        VeeamRepositoryOnlineStatusSensor(coordinator, entry, repository),
-                        VeeamRepositoryOutOfDateSensor(coordinator, entry, repository),
-                        VeeamRepositoryImmutableSensor(coordinator, entry, repository),
-                        VeeamRepositoryAccessibleSensor(coordinator, entry, repository),
-                    ]
-                )
-                added_repository_ids.add(repo_id)
-
-        if not server_added:
-            new_entities.extend(
-                [
-                    VeeamServerHealthOkSensor(coordinator, entry),
-                    VeeamServerConnectedSensor(coordinator, entry),
-                ]
-            )
-            server_added = True
-
-        if (
-            not license_added
-            and coordinator.data.get("license_info")
-            and check_api_feature_availability(api_version, "api.license_")
-        ):
-            new_entities.append(VeeamLicenseAutoUpdateSensor(coordinator, entry))
-            license_added = True
-
-        if new_entities:
-            _drop_superseded_sensor_entities(hass, entry, new_entities)
-            _LOGGER.debug("Adding %d Veeam binary sensors", len(new_entities))
-            async_add_entities(new_entities)
-
-    _sync_entities()
-    coordinator.async_add_listener(_sync_entities)
+    add(
+        [
+            VeeamServerHealthOkSensor(coordinator, entry),
+            VeeamServerConnectedSensor(coordinator, entry),
+            VeeamLicenseAutoUpdateSensor(coordinator, entry),
+        ]
+    )
 
 
 # ===========================
@@ -121,61 +141,56 @@ async def async_setup_entry(
 # ===========================
 
 
-class VeeamServerBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
-    """Base class for Veeam Server binary sensors."""
+class _ServerStatusSensor(VeeamServerEntity, BinarySensorEntity):
+    """A sensor about the connection itself.
 
-    _attr_has_entity_name = True
+    Always available: "unavailable" is what these report *about*, so they have to be able
+    to say off rather than disappear exactly when they matter.
+    """
 
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator)
-        self._config_entry = config_entry
-
-    @property
-    def device_info(self):
-        """Return device info for the Veeam server."""
-        return {
-            "identifiers": {(DOMAIN, f"server_{self._config_entry.entry_id}")},
-            "name": "Veeam Server",
-            "manufacturer": "Veeam",
-            "model": "Backup for Microsoft 365",
-        }
-
-
-class VeeamServerHealthOkSensor(VeeamServerBinarySensorBase):
-    """Binary sensor for Veeam Server Health."""
-
-    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    endpoint = ""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_health_ok"
-        self._attr_name = "Health OK"
+    @property
+    def available(self) -> bool:
+        return True
+
+
+class VeeamServerHealthOkSensor(_ServerStatusSensor):
+    """On when the last poll succeeded and every endpoint answered."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "server_health_ok", "server_health_ok")
 
     @property
-    def is_on(self) -> bool | None:
-        # Health reflects the current update status
-        return self.coordinator.last_update_success
+    def is_on(self) -> bool:
+        if not self.coordinator.last_update_success:
+            return False
+        diagnostics = (self.coordinator.data or {}).get("diagnostics") or {}
+        return bool(diagnostics.get("health_ok"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        diagnostics = (self.coordinator.data or {}).get("diagnostics") or {}
+        return {"failed_endpoints": diagnostics.get("failed_endpoints") or []}
 
     @property
     def icon(self) -> str:
         return "mdi:heart-pulse" if self.is_on else "mdi:heart-off"
 
 
-class VeeamServerConnectedSensor(VeeamServerBinarySensorBase):
-    """Binary sensor for Veeam Server Connection Status."""
+class VeeamServerConnectedSensor(_ServerStatusSensor):
+    """On while polls reach the server and it answers."""
 
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_server_connected"
-        self._attr_name = "Connected"
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "server_connected", "server_connected")
 
     @property
-    def is_on(self) -> bool | None:
-        # Connection status reflects the current update status
+    def is_on(self) -> bool:
         return self.coordinator.last_update_success
 
     @property
@@ -188,40 +203,20 @@ class VeeamServerConnectedSensor(VeeamServerBinarySensorBase):
 # ===========================
 
 
-class VeeamLicenseBinarySensorBase(VeeamLicenseMixin, CoordinatorEntity, BinarySensorEntity):
-    """Base class for Veeam License binary sensors."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator, config_entry):
-        CoordinatorEntity.__init__(self, coordinator)
-        VeeamLicenseMixin.__init__(self, coordinator, config_entry)
-
-
-class VeeamLicenseAutoUpdateSensor(VeeamLicenseBinarySensorBase):
+class VeeamLicenseAutoUpdateSensor(VeeamLicenseEntity, BinarySensorEntity):
     """Binary sensor for Veeam License Auto Update."""
 
     _attr_device_class = BinarySensorDeviceClass.UPDATE
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:update"
 
-    def __init__(self, coordinator, config_entry):
-        super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_license_auto_update"
-        self._attr_name = "Auto Update Enabled"
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "license_auto_update", "license_auto_update")
 
     @property
     def is_on(self) -> bool | None:
-        license_info = self._license_info()
-        if not license_info:
-            return None
-        value = license_info.get("auto_update_enabled")
-        if value is None:
-            return None
-        return bool(value)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:update"
+        license_info = self.license_info
+        return license_info.get("auto_update_enabled") if license_info else None
 
 
 # ===========================
@@ -229,118 +224,24 @@ class VeeamLicenseAutoUpdateSensor(VeeamLicenseBinarySensorBase):
 # ===========================
 
 
-class VeeamRepositoryBinarySensorBase(VeeamRepositoryMixin, CoordinatorEntity, BinarySensorEntity):
-    """Base class for Veeam Repository binary sensors."""
+class VeeamRepositoryBinarySensor(VeeamItemEntity, BinarySensorEntity):
+    """One repository flag. Unknown on API versions that do not report it."""
 
-    _attr_has_entity_name = True
+    entity_description: VeeamRepositoryBinaryDescription
 
-    def __init__(self, coordinator, config_entry, repository_data):
-        CoordinatorEntity.__init__(self, coordinator)
-        VeeamRepositoryMixin.__init__(self, coordinator, config_entry, repository_data)
-
-
-class VeeamRepositoryOnlineStatusSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Online Status."""
-
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_online"
-        self._attr_name = "Online"
+    def __init__(self, coordinator, entry, item, description: VeeamRepositoryBinaryDescription):
+        self.entity_description = description
+        super().__init__(
+            coordinator, entry, "repositories", item, description.key, description.translation_key
+        )
 
     @property
     def is_on(self) -> bool | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        value = repo.get("is_online")
-        if value is None:
-            return None
-        return bool(value)
+        repo = self.item
+        value = repo.get(self.entity_description.value_key) if repo else None
+        return None if value is None else bool(value)
 
     @property
     def icon(self) -> str:
-        return "mdi:check-network" if self.is_on else "mdi:close-network"
-
-
-class VeeamRepositoryOutOfDateSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Out of Date Status."""
-
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_out_of_date"
-        self._attr_name = "Out of Date"
-
-    @property
-    def is_on(self) -> bool | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        value = repo.get("is_out_of_date")
-        if value is None:
-            return None
-        return bool(value)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:alert-octagon" if self.is_on else "mdi:check-decagram"
-
-
-class VeeamRepositoryImmutableSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Immutability.
-
-    No device class: immutability being off is a configuration choice, not a problem, and
-    PROBLEM would colour it red.
-    """
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_immutable"
-        self._attr_name = "Immutable"
-
-    @property
-    def is_on(self) -> bool | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        value = repo.get("is_immutable")
-        if value is None:
-            return None
-        return bool(value)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:lock" if self.is_on else "mdi:lock-open"
-
-
-class VeeamRepositoryAccessibleSensor(VeeamRepositoryBinarySensorBase):
-    """Binary sensor for Veeam Repository Accessible status."""
-
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator, config_entry, repository_data):
-        super().__init__(coordinator, config_entry, repository_data)
-        self._attr_unique_id = f"{config_entry.entry_id}_repository_{self._repo_id}_accessible"
-        self._attr_name = "Accessible"
-
-    @property
-    def is_on(self) -> bool | None:
-        repo = self._repository()
-        if not repo:
-            return None
-        value = repo.get("is_accessible")
-        if value is None:
-            return None
-        return bool(value)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:folder-open" if self.is_on else "mdi:folder-lock"
+        description = self.entity_description
+        return description.icon_on if self.is_on else description.icon_off
