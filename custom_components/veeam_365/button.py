@@ -8,6 +8,7 @@ worked.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 from typing import Any
@@ -46,6 +47,8 @@ class VeeamButtonDescription(ButtonEntityDescription):
     name_placeholder: str = "job_name"
     # Whether the operation starts a job and takes RESTStartJobOptions
     start_options: bool = False
+    # Any other request body, built from the API version's models
+    body_fn: Callable[[Any], Any] | None = None
 
 
 def _job_buttons(prefix: str, api: str, id_param: str) -> tuple[VeeamButtonDescription, ...]:
@@ -89,6 +92,22 @@ REPOSITORY_BUTTONS = (
         name_placeholder="repository_name",
     ),
 )
+ORGANIZATION_BUTTONS = (
+    VeeamButtonDescription(
+        key="synchronize",
+        translation_key="organization_synchronize",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:account-sync",
+        operation="organization_sync.organization_sync_start",
+        id_param="organization_id",
+        failure_key="organization_synchronize_failed",
+        name_placeholder="organization_name",
+        # An incremental sync, as the console's Synchronize does by default
+        body_fn=lambda models: models.RESTOrganizationSyncOptions(
+            type_=models.RESTOrganizationSyncOptionsType.INCREMENTAL
+        ),
+    ),
+)
 
 
 async def async_setup_entry(
@@ -120,10 +139,17 @@ async def async_setup_entry(
         factory("repositories", REPOSITORY_BUTTONS),
         async_add_entities,
     )
+    async_track_items(
+        coordinator,
+        entry,
+        "organizations",
+        factory("organizations", ORGANIZATION_BUTTONS),
+        async_add_entities,
+    )
 
 
 class VeeamButton(VeeamItemEntity, ButtonEntity):
-    """Start, stop, enable or disable a job, or synchronize a repository."""
+    """Start, stop, enable or disable a job, or synchronize a repository or organization."""
 
     entity_description: VeeamButtonDescription
 
@@ -152,6 +178,8 @@ class VeeamButton(VeeamItemEntity, ButtonEntity):
         if description.start_options and sdk.accepts(description.operation, "body"):
             # An incremental run, as the Start button in the console does
             kwargs["body"] = sdk.models.RESTStartJobOptions(full=False)
+        elif description.body_fn is not None:
+            kwargs["body"] = description.body_fn(sdk.models)
 
         try:
             async with asyncio.timeout(ACTION_TIMEOUT):

@@ -53,6 +53,8 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "license_info": None,
     "repositories": [],
     "proxies": [],
+    "organizations": [],
+    "organization_sync": {},
     "health": None,
 }
 
@@ -60,8 +62,27 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
 # older versions it is not fetched at all rather than reported as a failing endpoint.
 HEALTH_OPERATION = "health.health_get"
 
+# Organization cache synchronization state: every organization in one call from v8, one
+# call per organization on v7, not at all on v6
+SYNC_STATES_OPERATION = "organization_sync.organization_sync_get_states"
+SYNC_STATE_OPERATION = "organization_sync.organization_sync_get_state"
+LICENSING_OPERATION = (
+    "organization_licensing_information.organization_licensing_information_get_license_count"
+)
+
+
+def supports_organization_sync(sdk: VeeamSdk) -> bool:
+    """Whether this API version reports organization sync state at all (v7 and later)."""
+    return sdk.has_operation(SYNC_STATES_OPERATION) or sdk.has_operation(SYNC_STATE_OPERATION)
+
+
+def reports_sync_progress(sdk: VeeamSdk) -> bool:
+    """Whether it also reports the sync in progress or queued, and each part (v8)."""
+    return sdk.has_operation(SYNC_STATES_OPERATION)
+
+
 # Collections whose items become devices, keyed by data key
-COLLECTIONS = ("jobs", "copy_jobs", "repositories", "proxies")
+COLLECTIONS = ("jobs", "copy_jobs", "repositories", "proxies", "organizations")
 
 # Errors that mean the server could not be reached or did not answer in time
 TRANSPORT_ERRORS = (httpx.HTTPError, OSError, TimeoutError)
@@ -334,6 +355,101 @@ def parse_proxy(proxy: Any) -> dict[str, Any] | None:
     }
 
 
+def parse_organization(org: Any, licensing: Any = None) -> dict[str, Any] | None:
+    org_id = id_field(org)
+    if org_id is None:
+        return None
+    org_type = text_field(org, "type_")
+    region = text_field(org, "region")
+    services = [
+        service
+        for service, flags in (
+            ("Exchange", ("is_exchange_online", "is_exchange")),
+            ("SharePoint", ("is_share_point_online", "is_sharepoint")),
+            ("Teams", ("is_teams_online",)),
+            ("Teams Chats", ("is_teams_chats_online",)),
+        )
+        if any(field(org, flag) for flag in flags)
+    ]
+    return {
+        "id": org_id,
+        "name": text_field(org, "name") or text_field(org, "office_name") or "Unknown Organization",
+        "office_name": text_field(org, "office_name"),
+        "description": text_field(org, "description", ""),
+        "type": humanize(org_type, "Unknown"),
+        "type_raw": org_type,
+        "region": humanize(region, "Unknown"),
+        "region_raw": region,
+        "services": services,
+        "is_backed_up": bool_field(org, "is_backedup"),
+        "first_backup": field(org, "first_backuptime"),
+        "last_backup": field(org, "last_backuptime"),
+        # From the organization's licensing information; None when it could not be read
+        "licensed_users": int_field(licensing, "licensed_users") if licensing else None,
+        "new_users": int_field(licensing, "new_users") if licensing else None,
+    }
+
+
+def _sync_result(value: str | None) -> str | None:
+    # v7 reports "None" for an organization that has never been synchronized
+    return None if value in (None, "None") else value
+
+
+def parse_sync_state(state: Any) -> dict[str, Any]:
+    """One organization's cache synchronization state, from v7's or v8's shape.
+
+    v7 reports the last run only (type, status, lastSyncTime, error). v8 nests it under
+    lastSyncState, adds the run in progress or queued (currentSyncState), and breaks it down
+    per part (users, groups, group members, sites).
+    """
+    last = field(state, "last_sync_state")
+    if last is None and not hasattr(state, "last_sync_state"):
+        # v7
+        result = _sync_result(text_field(state, "status"))
+        sync_type = text_field(state, "type_")
+        return {
+            "last_result": result,
+            "has_sync_error": None if result is None else result == "Error",
+            "last_sync": field(state, "last_sync_time"),
+            "last_sync_type": humanize(sync_type) if sync_type else None,
+            "error": text_field(state, "error"),
+            "reports_current": False,
+            "current_status": None,
+            "current_status_raw": None,
+            "next_sync": None,
+            "parts": {},
+        }
+
+    result = _sync_result(text_field(last, "result")) if last is not None else None
+    sync_type = text_field(last, "type_") if last is not None else None
+    current = field(state, "current_sync_state")
+    current_status = text_field(current, "status") if current is not None else None
+    parts: dict[str, dict[str, Any]] = {}
+    parts_model = field(state, "parts")
+    for part in ("users", "groups", "group_members", "sites"):
+        part_state = field(parts_model, part) if parts_model is not None else None
+        if part_state is None:
+            continue
+        part_last = field(part_state, "last_sync_state")
+        parts[part] = {
+            "last_successful_sync": field(part_state, "last_successful_sync_time"),
+            "last_result": _sync_result(text_field(part_last, "result")) if part_last else None,
+        }
+    return {
+        "last_result": result,
+        "has_sync_error": None if result is None else result == "Error",
+        "last_sync": field(last, "end_time") if last is not None else None,
+        "last_sync_type": humanize(sync_type) if sync_type else None,
+        "error": text_field(last, "error") if last is not None else None,
+        "reports_current": True,
+        # Nothing queued or running reads as Idle rather than unknown
+        "current_status": humanize(current_status) if current_status else "Idle",
+        "current_status_raw": current_status,
+        "next_sync": field(current, "scheduled_time") if current is not None else None,
+        "parts": parts,
+    }
+
+
 def parse_server_info(service_instance: Any) -> dict[str, Any]:
     return {
         "installation_id": id_field(service_instance, "installation_id"),
@@ -557,6 +673,7 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _fetch_all(self) -> dict[str, Any]:
         previous = self.data or {}
+        data: dict[str, Any] = {}
         fetchers: dict[str, Callable[[], Awaitable[Any]]] = {
             "jobs": self._fetch_jobs,
             "copy_jobs": self._fetch_copy_jobs,
@@ -564,11 +681,17 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "license_info": self._fetch_license,
             "repositories": self._fetch_repositories,
             "proxies": self._fetch_proxies,
+            "organizations": self._fetch_organizations,
         }
+        if supports_organization_sync(self.sdk):
+            # After the organizations, whose IDs v7 needs: this runs once data holds them
+            # (freshly fetched, or the last known ones if that fetch failed)
+            fetchers["organization_sync"] = lambda: self._fetch_organization_sync(
+                data["organizations"]
+            )
         if self.sdk.has_operation(HEALTH_OPERATION):
             fetchers["health"] = self._fetch_health
 
-        data: dict[str, Any] = {}
         fetch_ok: dict[str, bool] = {}
         errors: dict[str, str] = {}
 
@@ -659,6 +782,74 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return parse_items(
             "proxies", await self._fetch_collection("proxy.proxy_get_proxies"), parse_proxy
         )
+
+    async def _fetch_organizations(self) -> list[dict[str, Any]]:
+        items = await self._fetch_collection("organization.organization_get")
+        organizations: list[dict[str, Any]] = []
+        for org in items:
+            # Licensing is a pair of counters; failing to read it should not cost the
+            # organization, so it reads unknown instead
+            licensing = None
+            org_id = id_field(org)
+            if org_id is not None and self.sdk.has_operation(LICENSING_OPERATION):
+                try:
+                    licensing = await self._call(LICENSING_OPERATION, organization_id=org_id)
+                except (VeeamAuthenticationError, VeeamSessionError):
+                    raise
+                except (EndpointError, VeeamError, *PARSE_ERRORS) as err:
+                    _LOGGER.debug(
+                        "Could not fetch licensing for organization %s: %s",
+                        org_id,
+                        describe_error(err),
+                    )
+            organizations.extend(
+                parse_items("organizations", [org], lambda o: parse_organization(o, licensing))
+            )
+        return organizations
+
+    async def _fetch_organization_sync(
+        self, organizations: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Sync state per organization ID."""
+        if self.sdk.has_operation(SYNC_STATES_OPERATION):
+            response = await self._call(SYNC_STATES_OPERATION)
+            if not isinstance(response, list):
+                raise EndpointError(f"expected a list, got {type(response).__name__}")
+            states: dict[str, dict[str, Any]] = {}
+            for state in response:
+                org_id = id_field(state, "organization_id")
+                if org_id is None:
+                    continue
+                try:
+                    states[org_id] = parse_sync_state(state)
+                except PARSE_ERRORS as err:
+                    _LOGGER.warning(
+                        "Skipping the sync state of organization %s: %s",
+                        org_id,
+                        describe_error(err),
+                    )
+            return states
+
+        # v7: one call per organization. One that cannot be read is left out, so its sync
+        # entities read unknown; the endpoint only fails when none can be read.
+        states = {}
+        errors: list[str] = []
+        for org in organizations:
+            try:
+                state = await self._call(SYNC_STATE_OPERATION, organization_id=org["id"])
+                states[org["id"]] = parse_sync_state(state)
+            except (VeeamAuthenticationError, VeeamSessionError):
+                raise
+            except (EndpointError, VeeamError, *PARSE_ERRORS) as err:
+                errors.append(describe_error(err))
+                _LOGGER.debug(
+                    "Could not fetch the sync state of organization %s: %s",
+                    org["id"],
+                    errors[-1],
+                )
+        if organizations and not states:
+            raise EndpointError(errors[0])
+        return states
 
     async def _fetch_server_info(self) -> dict[str, Any]:
         return parse_server_info(await self._call("service_instance.service_instance_get"))

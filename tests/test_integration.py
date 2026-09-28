@@ -24,12 +24,15 @@ from .conftest import (
     ENTRY_DATA,
     JOB_ID,
     OBJECT_REPO_ID,
+    ORG_ID,
     PROXY_ID,
     REPO_ID,
     FakeServer,
     health_json,
     job_json,
+    organization_json,
     proxy_json,
+    sync_state_json,
 )
 
 JOB = "vb365_job_daily_mail"
@@ -744,3 +747,159 @@ async def test_a_removed_proxy_is_pruned(hass: HomeAssistant, server: FakeServer
     assert _device(hass, f"proxy_{second}") is None
     assert hass.states.get("binary_sensor.vb365_proxy_proxy02_online") is None
     assert _device(hass, f"proxy_{PROXY_ID}") is not None
+
+
+# ---------------------------------------------------------------------------
+# Organizations
+# ---------------------------------------------------------------------------
+
+ORG = "vb365_organization_contoso_onmicrosoft_com"
+ORGANIZATIONS = "organization.organization_get"
+SYNC_START = "organization_sync.organization_sync_start"
+
+
+async def test_organizations_get_a_device_each(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+
+    last_backup = hass.states.get(f"sensor.{ORG}_last_backup")
+    assert last_backup.state == "2026-09-27T05:10:00+00:00"
+    assert last_backup.attributes["services"] == ["Exchange", "SharePoint"]
+    assert last_backup.attributes["office_name"] == "Contoso"
+    assert state(hass, f"sensor.{ORG}_licensed_users") == "250"
+    assert state(hass, f"sensor.{ORG}_new_users") == "3"
+    assert state(hass, f"sensor.{ORG}_type") == "Office365"
+    assert state(hass, f"sensor.{ORG}_region") == "Worldwide"
+    assert state(hass, f"binary_sensor.{ORG}_backed_up") == STATE_ON
+
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, f"organization_{ORG_ID}"), entry.entry_id
+    )
+    assert device is not None and device.name == "VB365 Organization contoso.onmicrosoft.com"
+    assert device.model == "Microsoft 365 Organization"
+
+
+async def test_organization_sync_state_v8(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+
+    sync = hass.states.get(f"binary_sensor.{ORG}_sync")
+    assert sync.state == STATE_OFF
+    assert sync.attributes["raw_value"] == "Success"
+    assert sync.attributes["parts"]["users"]["last_result"] == "Success"
+    assert state(hass, f"sensor.{ORG}_last_sync") == "2026-09-28T02:15:00+00:00"
+    status = hass.states.get(f"sensor.{ORG}_sync_status")
+    assert status.state == "Queued"
+    assert status.attributes["next_sync"].isoformat() == "2026-09-28T10:30:00+00:00"
+    # Every organization's state in one call
+    assert len(server.calls_to("organization_sync.organization_sync_get_states")) == 1
+
+    server.sync_states[ORG_ID] = sync_state_json(result="Error", currentSyncState=None)
+    await refresh(hass, entry)
+
+    sync = hass.states.get(f"binary_sensor.{ORG}_sync")
+    assert sync.state == STATE_ON
+    assert sync.attributes["error"] == "Access to the Microsoft Graph API was denied."
+    # Nothing queued or running
+    assert state(hass, f"sensor.{ORG}_sync_status") == "Idle"
+
+
+async def test_an_organization_never_synced_reads_unknown(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.sync_states = {}
+    await setup_entry(hass)
+
+    assert state(hass, f"binary_sensor.{ORG}_sync") == STATE_UNKNOWN
+    assert state(hass, f"sensor.{ORG}_last_sync") == STATE_UNKNOWN
+    assert state(hass, f"sensor.{ORG}_licensed_users") == "250"
+
+
+async def test_a_failing_sync_endpoint_only_affects_sync_entities(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides["organization_sync.organization_sync_get_states"] = server.error()
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"binary_sensor.{ORG}_sync") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{ORG}_sync_status") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{ORG}_licensed_users") == "250"
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.attributes["failed_endpoints"] == ["organization_sync"]
+
+
+async def test_unreadable_licensing_costs_only_the_counters(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.licensing = {}
+    await setup_entry(hass)
+
+    assert state(hass, f"sensor.{ORG}_licensed_users") == STATE_UNKNOWN
+    assert state(hass, f"sensor.{ORG}_last_backup") == "2026-09-27T05:10:00+00:00"
+
+
+async def test_v7_asks_each_organization_for_its_sync_state(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    await setup_entry(hass, api_version="7")
+
+    assert server.calls_to("organization_sync.organization_sync_get_state") == [
+        {"organization_id": ORG_ID}
+    ]
+    assert state(hass, f"binary_sensor.{ORG}_sync") == STATE_OFF
+    assert state(hass, f"sensor.{ORG}_last_sync") == "2026-09-28T02:15:00+00:00"
+    # v7 reports no sync in progress or queued
+    assert hass.states.get(f"sensor.{ORG}_sync_status") is None
+    assert state(hass, f"button.{ORG}_synchronize") is not None
+
+
+async def test_v6_has_no_organization_sync(hass: HomeAssistant, server: FakeServer) -> None:
+    server.license = {"status": "Valid", "type": "Subscription"}
+    await setup_entry(hass, api_version="6")
+
+    assert state(hass, f"sensor.{ORG}_licensed_users") == "250"
+    assert hass.states.get(f"binary_sensor.{ORG}_sync") is None
+    assert hass.states.get(f"sensor.{ORG}_last_sync") is None
+    assert hass.states.get(f"button.{ORG}_synchronize") is None
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.state == STATE_ON
+
+
+@pytest.mark.parametrize("version", ["7", "8"])
+async def test_synchronize_starts_an_incremental_sync(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    await setup_entry(hass, api_version=version)
+
+    await press(hass, f"button.{ORG}_synchronize")
+
+    (call,) = server.calls_to(SYNC_START)
+    assert call["organization_id"] == ORG_ID
+    assert call["body"].to_dict() == {"type": "Incremental"}
+
+
+async def test_a_refused_synchronize_is_reported(hass: HomeAssistant, server: FakeServer) -> None:
+    await setup_entry(hass)
+    server.overrides[SYNC_START] = server.error("Synchronization is already running")
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await press(hass, f"button.{ORG}_synchronize")
+
+    assert raised.value.translation_key == "organization_synchronize_failed"
+    assert raised.value.translation_placeholders["organization_name"] == "contoso.onmicrosoft.com"
+
+
+async def test_a_removed_organization_is_pruned(hass: HomeAssistant, server: FakeServer) -> None:
+    second = "12121212-1212-1212-1212-121212121212"
+    server.collections[ORGANIZATIONS] = [
+        organization_json(),
+        organization_json(second, "fabrikam.onmicrosoft.com"),
+    ]
+    entry = await setup_entry(hass)
+    assert _device(hass, f"organization_{second}") is not None
+
+    server.collections[ORGANIZATIONS] = [organization_json()]
+    await refresh(hass, entry)
+
+    assert _device(hass, f"organization_{second}") is None
+    assert _device(hass, f"organization_{ORG_ID}") is not None

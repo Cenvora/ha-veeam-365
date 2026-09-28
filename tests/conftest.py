@@ -25,6 +25,7 @@ OBJECT_REPO_ID = "44444444-4444-4444-4444-444444444444"
 INSTALLATION_ID = "55555555-5555-5555-5555-555555555555"
 PROXY_ID = "66666666-6666-6666-6666-666666666666"
 POOL_ID = "77777777-7777-7777-7777-777777777777"
+ORG_ID = "99999999-9999-9999-9999-999999999999"
 
 ENTRY_DATA = {
     "host": "veeam.example.com",
@@ -139,6 +140,55 @@ def proxy_json(proxy_id: str = PROXY_ID, host_name: str = "proxy01", **overrides
     return data
 
 
+def organization_json(org_id: str = ORG_ID, name: str = "contoso.onmicrosoft.com", **overrides):
+    data = {
+        "id": org_id,
+        "name": name,
+        "officeName": "Contoso",
+        "description": "Main tenant",
+        "type": "Office365",
+        "region": "Worldwide",
+        "isExchangeOnline": True,
+        "isSharePointOnline": True,
+        "isTeamsOnline": False,
+        "isTeamsChatsOnline": False,
+        "isBackedup": True,
+        "firstBackuptime": "2025-01-01T00:00:00+00:00",
+        "lastBackuptime": "2026-09-27T05:10:00+00:00",
+    }
+    data.update(overrides)
+    return data
+
+
+def sync_state_json(org_id: str = ORG_ID, result: str = "Success", **overrides) -> dict:
+    """A v8 organization sync state."""
+    last = {
+        "type": "Incremental",
+        "result": result,
+        "startTime": "2026-09-28T02:00:00+00:00",
+        "endTime": "2026-09-28T02:15:00+00:00",
+    }
+    if result == "Error":
+        last["error"] = "Access to the Microsoft Graph API was denied."
+    data = {
+        "organizationId": org_id,
+        "lastSyncState": last,
+        "currentSyncState": {
+            "type": "Incremental",
+            "scheduledTime": "2026-09-28T10:30:00+00:00",
+            "status": "Queued",
+        },
+        "parts": {
+            "users": {
+                "lastSuccessfulSyncTime": "2026-09-28T02:05:00+00:00",
+                "lastSyncState": dict(last),
+            },
+        },
+    }
+    data.update(overrides)
+    return data
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -177,6 +227,7 @@ PAGE_CLASSES = {
         "PageOfRESTBackupRepository",
     ),
     "proxy.proxy_get_proxies": ("RESTProxy", "PageOfRESTProxy"),
+    "organization.organization_get": ("RestOrganizationComposed", "PageOfRestOrganizationComposed"),
 }
 
 
@@ -194,6 +245,18 @@ class FakeServer:
                 object_repo_json(),
             ],
             "proxy.proxy_get_proxies": [proxy_json()],
+            "organization.organization_get": [organization_json()],
+        }
+        # Per organization ID
+        self.licensing: dict[str, dict] = {ORG_ID: {"licensedUsers": 250, "newUsers": 3}}
+        self.sync_states: dict[str, dict] = {ORG_ID: sync_state_json()}
+        # What v7 answers for one organization
+        self.v7_sync_states: dict[str, dict] = {
+            ORG_ID: {
+                "type": "Incremental",
+                "status": "Success",
+                "lastSyncTime": "2026-09-28T02:15:00+00:00",
+            }
         }
         self.license = license_json()
         self.health = health_json()
@@ -240,6 +303,21 @@ class FakeServer:
             return self.models.RESTLicenseAutoUpdate.from_dict({"isEnabled": True})
         if name == "health.health_get":
             return self.models.RESTHealthReport.from_dict(self.health)
+        if name.startswith("organization_licensing_information."):
+            licensing = self.licensing.get(str(kwargs["organization_id"]))
+            if licensing is None:
+                return self.error("Organization not found")
+            return self.models.RESTOrganizationLicensingInformation.from_dict(licensing)
+        if name == "organization_sync.organization_sync_get_states":
+            return [
+                self.models.RESTOrganizationSyncState.from_dict(state)
+                for state in self.sync_states.values()
+            ]
+        if name == "organization_sync.organization_sync_get_state":
+            state = self.v7_sync_states.get(str(kwargs["organization_id"]))
+            if state is None:
+                return self.error("Organization not found")
+            return self.models.RESTOrganizationSyncState.from_dict(state)
         # Actions answer 204 No Content, which the SDK returns as None
         return None
 

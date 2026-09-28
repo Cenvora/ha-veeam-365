@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "System operacyjny"
+      },
+      "organization_last_backup": {
+        "name": "Ostatnia kopia zapasowa"
+      },
+      "organization_licensed_users": {
+        "name": "Licencjonowani użytkownicy"
+      },
+      "organization_new_users": {
+        "name": "Nowi użytkownicy"
+      },
+      "organization_type": {
+        "name": "Typ"
+      },
+      "organization_region": {
+        "name": "Region"
+      },
+      "organization_last_sync": {
+        "name": "Ostatnia synchronizacja"
+      },
+      "organization_sync_status": {
+        "name": "Stan synchronizacji"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Zabezpieczona"
+      },
+      "organization_sync": {
+        "name": "Synchronizacja"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Wyłącz"
+      },
+      "organization_synchronize": {
+        "name": "Synchronizuj"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Nie udało się wyłączyć zadania kopiowania {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Nie udało się zsynchronizować organizacji {organization_name}: {error}"
     }
   },
   "issues": {

@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Système d'exploitation"
+      },
+      "organization_last_backup": {
+        "name": "Dernière sauvegarde"
+      },
+      "organization_licensed_users": {
+        "name": "Utilisateurs sous licence"
+      },
+      "organization_new_users": {
+        "name": "Nouveaux utilisateurs"
+      },
+      "organization_type": {
+        "name": "Type"
+      },
+      "organization_region": {
+        "name": "Région"
+      },
+      "organization_last_sync": {
+        "name": "Dernière synchronisation"
+      },
+      "organization_sync_status": {
+        "name": "État de la synchronisation"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "En ligne"
+      },
+      "organization_backed_up": {
+        "name": "Sauvegardée"
+      },
+      "organization_sync": {
+        "name": "Synchronisation"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Désactiver"
+      },
+      "organization_synchronize": {
+        "name": "Synchroniser"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Échec de la désactivation de la tâche de copie {job_name} : {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Échec de la synchronisation de l'organisation {organization_name} : {error}"
     }
   },
   "issues": {

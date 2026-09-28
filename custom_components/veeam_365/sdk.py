@@ -41,11 +41,16 @@ READ_OPERATIONS = (
     "license_.license_get_auto_update",
     "backup_repository.backup_repository_get_repositories",
     "proxy.proxy_get_proxies",
+    "organization.organization_get",
+    "organization_licensing_information.organization_licensing_information_get_license_count",
 )
 # Operations only some API versions have, keyed by the first version that has them. load_sdk
 # skips what a version lacks, and callers check has_operation before using one.
 VERSIONED_OPERATIONS: dict[str, str] = {
     "health.health_get": "v8",
+    "organization_sync.organization_sync_get_state": "v7",
+    "organization_sync.organization_sync_get_states": "v8",
+    "organization_sync.organization_sync_start": "v7",
 }
 ACTION_OPERATIONS = (
     "job.job_start_action",

@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Sistema operativo"
+      },
+      "organization_last_backup": {
+        "name": "Ultimo backup"
+      },
+      "organization_licensed_users": {
+        "name": "Utenti con licenza"
+      },
+      "organization_new_users": {
+        "name": "Nuovi utenti"
+      },
+      "organization_type": {
+        "name": "Tipo"
+      },
+      "organization_region": {
+        "name": "Regione"
+      },
+      "organization_last_sync": {
+        "name": "Ultima sincronizzazione"
+      },
+      "organization_sync_status": {
+        "name": "Stato sincronizzazione"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Sottoposta a backup"
+      },
+      "organization_sync": {
+        "name": "Sincronizzazione"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Disabilita"
+      },
+      "organization_synchronize": {
+        "name": "Sincronizza"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Impossibile disabilitare il job di copia {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Impossibile sincronizzare l'organizzazione {organization_name}: {error}"
     }
   },
   "issues": {

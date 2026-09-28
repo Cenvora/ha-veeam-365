@@ -17,7 +17,9 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, U
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .coordinator import reports_sync_progress, supports_organization_sync
 from .entity import (
+    OrganizationSyncMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
     VeeamServerEntity,
@@ -276,6 +278,82 @@ PROXY_SENSORS: tuple[VeeamSensorDescription, ...] = (
     ),
 )
 
+ORGANIZATION_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="last_backup",
+        translation_key="organization_last_backup",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:backup-restore",
+        value_fn=lambda org: org.get("last_backup"),
+        attributes_fn=lambda org: {
+            "first_backup": org.get("first_backup"),
+            "office_name": org.get("office_name"),
+            "services": org.get("services") or [],
+        },
+    ),
+    VeeamSensorDescription(
+        key="licensed_users",
+        translation_key="organization_licensed_users",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:account-multiple-check",
+        value_fn=lambda org: org.get("licensed_users"),
+    ),
+    VeeamSensorDescription(
+        key="new_users",
+        translation_key="organization_new_users",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:account-multiple-plus",
+        value_fn=lambda org: org.get("new_users"),
+    ),
+    VeeamSensorDescription(
+        key="type",
+        translation_key="organization_type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:domain",
+        value_fn=lambda org: org.get("type"),
+        raw_key="type_raw",
+    ),
+    VeeamSensorDescription(
+        key="region",
+        translation_key="organization_region",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:earth",
+        value_fn=lambda org: org.get("region"),
+        raw_key="region_raw",
+    ),
+)
+
+# Read from the organization's sync state (API v7 and later)
+ORGANIZATION_SYNC_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="last_sync",
+        translation_key="organization_last_sync",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:account-sync",
+        value_fn=lambda sync: sync.get("last_sync"),
+        attributes_fn=lambda sync: {
+            "result": sync.get("last_result"),
+            "type": sync.get("last_sync_type"),
+        },
+    ),
+)
+
+# Only v8 reports the sync in progress or queued
+ORGANIZATION_SYNC_PROGRESS_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="sync_status",
+        translation_key="organization_sync_status",
+        value_fn=lambda sync: sync.get("current_status"),
+        raw_key="current_status_raw",
+        icon_fn=lambda sync: {
+            "running": "mdi:sync",
+            "queued": "mdi:timer-sand",
+        }.get(str(sync.get("current_status_raw") or "").lower(), "mdi:sync-off"),
+        attributes_fn=lambda sync: {"next_sync": sync.get("next_sync")},
+    ),
+)
+
 SERVER_SENSORS: tuple[VeeamSensorDescription, ...] = (
     VeeamSensorDescription(
         key="server_version",
@@ -400,6 +478,25 @@ async def async_setup_entry(
         coordinator, entry, "proxies", _item_sensors("proxies", PROXY_SENSORS), async_add_entities
     )
 
+    sync_descriptions: tuple[VeeamSensorDescription, ...] = ()
+    if supports_organization_sync(coordinator.sdk):
+        sync_descriptions += ORGANIZATION_SYNC_SENSORS
+    if reports_sync_progress(coordinator.sdk):
+        sync_descriptions += ORGANIZATION_SYNC_PROGRESS_SENSORS
+
+    def organization_sensors(item: dict[str, Any]) -> list[SensorEntity]:
+        entities: list[SensorEntity] = [
+            VeeamItemSensor(coordinator, entry, "organizations", item, description)
+            for description in ORGANIZATION_SENSORS
+        ]
+        entities.extend(
+            VeeamOrganizationSyncSensor(coordinator, entry, "organizations", item, description)
+            for description in sync_descriptions
+        )
+        return entities
+
+    async_track_items(coordinator, entry, "organizations", organization_sensors, async_add_entities)
+
     # One server and one license per entry. The license device is created even if the
     # license could not be read on the first poll: its entities are simply unavailable until
     # it can, rather than never appearing.
@@ -449,7 +546,7 @@ class _DescribedSensor(SensorEntity):
 
 
 class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
-    """A sensor on a job, copy job, repository or proxy device."""
+    """A sensor on a job, copy job, repository, proxy or organization device."""
 
     def __init__(self, coordinator, entry, key, item, description: VeeamSensorDescription):
         self.entity_description = description
@@ -459,6 +556,10 @@ class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
 
     def _source(self) -> dict[str, Any] | None:
         return self.item
+
+
+class VeeamOrganizationSyncSensor(OrganizationSyncMixin, VeeamItemSensor):
+    """A sensor on an organization device showing its cache sync state."""
 
 
 class VeeamServerSensor(VeeamServerEntity, _DescribedSensor):

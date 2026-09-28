@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Betriebssystem"
+      },
+      "organization_last_backup": {
+        "name": "Letzte Sicherung"
+      },
+      "organization_licensed_users": {
+        "name": "Lizenzierte Benutzer"
+      },
+      "organization_new_users": {
+        "name": "Neue Benutzer"
+      },
+      "organization_type": {
+        "name": "Typ"
+      },
+      "organization_region": {
+        "name": "Region"
+      },
+      "organization_last_sync": {
+        "name": "Letzte Synchronisierung"
+      },
+      "organization_sync_status": {
+        "name": "Synchronisierungsstatus"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Gesichert"
+      },
+      "organization_sync": {
+        "name": "Synchronisierung"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Deaktivieren"
+      },
+      "organization_synchronize": {
+        "name": "Synchronisieren"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Kopierjob {job_name} konnte nicht deaktiviert werden: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Organisation {organization_name} konnte nicht synchronisiert werden: {error}"
     }
   },
   "issues": {

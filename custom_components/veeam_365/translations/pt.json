@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Sistema operacional"
+      },
+      "organization_last_backup": {
+        "name": "Último backup"
+      },
+      "organization_licensed_users": {
+        "name": "Usuários licenciados"
+      },
+      "organization_new_users": {
+        "name": "Novos usuários"
+      },
+      "organization_type": {
+        "name": "Tipo"
+      },
+      "organization_region": {
+        "name": "Região"
+      },
+      "organization_last_sync": {
+        "name": "Última sincronização"
+      },
+      "organization_sync_status": {
+        "name": "Status da sincronização"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Com backup"
+      },
+      "organization_sync": {
+        "name": "Sincronização"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Desativar"
+      },
+      "organization_synchronize": {
+        "name": "Sincronizar"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Falha ao desativar o job de cópia {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Falha ao sincronizar a organização {organization_name}: {error}"
     }
   },
   "issues": {

@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Operační systém"
+      },
+      "organization_last_backup": {
+        "name": "Poslední záloha"
+      },
+      "organization_licensed_users": {
+        "name": "Licencovaní uživatelé"
+      },
+      "organization_new_users": {
+        "name": "Noví uživatelé"
+      },
+      "organization_type": {
+        "name": "Typ"
+      },
+      "organization_region": {
+        "name": "Oblast"
+      },
+      "organization_last_sync": {
+        "name": "Poslední synchronizace"
+      },
+      "organization_sync_status": {
+        "name": "Stav synchronizace"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Zálohováno"
+      },
+      "organization_sync": {
+        "name": "Synchronizace"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Zakázat"
+      },
+      "organization_synchronize": {
+        "name": "Synchronizovat"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Nepodařilo se zakázat úlohu kopírování {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Synchronizace organizace {organization_name} se nezdařila: {error}"
     }
   },
   "issues": {

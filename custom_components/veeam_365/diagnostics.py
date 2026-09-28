@@ -49,6 +49,7 @@ async def async_get_config_entry_diagnostics(
             "copy_jobs_count": len(data.get("copy_jobs", [])),
             "repositories_count": len(data.get("repositories", [])),
             "proxies_count": len(data.get("proxies", [])),
+            "organizations_count": len(data.get("organizations", [])),
             "has_server_info": data.get("server_info") is not None,
             "has_license_info": data.get("license_info") is not None,
             # Which endpoints answered on the last successful poll
@@ -113,6 +114,14 @@ async def async_get_config_entry_diagnostics(
             state = f"{status} (maintenance {maintenance})" if maintenance else status
             proxies_summary[state] = proxies_summary.get(state, 0) + 1
         diagnostics_data["proxies_summary"] = proxies_summary
+
+    # Organization sync results, without organization names or errors (which can name users)
+    if data.get("organization_sync"):
+        sync_summary: dict[str, int] = {}
+        for sync in data["organization_sync"].values():
+            result = sync.get("last_result") or "never"
+            sync_summary[result] = sync_summary.get(result, 0) + 1
+        diagnostics_data["organization_sync_summary"] = sync_summary
 
     # Add diagnostics info
     if data.get("diagnostics"):

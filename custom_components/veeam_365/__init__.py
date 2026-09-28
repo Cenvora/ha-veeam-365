@@ -43,6 +43,7 @@ DEVICE_KINDS = {
     "copy_job_": "copy_jobs",
     "repository_": "repositories",
     "proxy_": "proxies",
+    "organization_": "organizations",
 }
 SINGLETON_KINDS = {
     "server_": "server_info",
