@@ -40,26 +40,24 @@ CONNECT_TIMEOUT = 60.0
 UPDATE_TIMEOUT = 180.0
 ACTION_TIMEOUT = 60.0
 
-# Page size for the paged v8 collection endpoints. The server default is 30, which silently
-# truncated larger installations to their first 30 jobs.
-PAGE_LIMIT = 100
+# Page size for every paged v8 collection request: the largest the server allows, so that
+# listing anything takes as few requests as possible. The server default is 30, which
+# silently truncated larger installations to their first 30 jobs.
+PAGE_LIMIT = 10000
 # Hard stop for pagination, in case a server keeps answering with full pages forever
 MAX_PAGES = 100
 
-# Protected users, groups, sites and teams are counted by paging through every one of them:
-# v8 pages carry no total. So they are counted hourly, on a coordinator of their own with its
-# own time limit, in pages far larger than the minute-by-minute poll uses (the server allows
-# up to 10,000). A large tenant can then neither slow the regular poll nor fail it.
 # Job sessions: how far back the first poll after startup looks for each job's latest
 # session (later polls only ask for what is new), and the overlap between polls that keeps a
 # session created just as the previous poll ran from slipping through
 JOB_SESSIONS_LOOKBACK_HOURS = 26
 JOB_SESSIONS_OVERLAP_MINUTES = 10
-JOB_SESSIONS_PAGE_LIMIT = 1000
 
+# Protected users, groups, sites and teams are counted by paging through every one of them:
+# v8 pages carry no total. So they are counted hourly, on a coordinator of their own with its
+# own time limit. A large tenant can then neither slow the regular poll nor fail it.
 PROTECTED_COUNT_INTERVAL = 3600  # seconds
 PROTECTED_COUNT_TIMEOUT = 900.0
-PROTECTED_PAGE_LIMIT = 1000
 
 _LOGGER = logging.getLogger(__name__)
 

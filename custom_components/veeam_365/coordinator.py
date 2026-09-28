@@ -41,12 +41,10 @@ from .const import (
     DOMAIN,
     JOB_SESSIONS_LOOKBACK_HOURS,
     JOB_SESSIONS_OVERLAP_MINUTES,
-    JOB_SESSIONS_PAGE_LIMIT,
     MAX_PAGES,
     PAGE_LIMIT,
     PROTECTED_COUNT_INTERVAL,
     PROTECTED_COUNT_TIMEOUT,
-    PROTECTED_PAGE_LIMIT,
     UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
 )
@@ -94,11 +92,13 @@ PROTECTED_OPERATIONS: dict[str, str] = {
 }
 
 
-# Repository maintenance sessions (v8): VB365 suspends every operation on the repositories a
-# session names while it is active
+# Repository maintenance sessions: VB365 suspends every operation on the repositories a
+# session names while it is active. In the v8 API, but only served by VB365 8.6 and later —
+# an older 8.x server answers the same API version without them.
 MAINTENANCE_SESSIONS_OPERATION = (
     "repository_maintenance_session.repository_maintenance_sessions_get"
 )
+MAINTENANCE_MIN_SERVER_VERSION = (8, 6)
 ACTIVE_MAINTENANCE_STATUSES = frozenset(
     {"Initialized", "Preparing", "Running", "Finishing", "Canceling", "Failing"}
 )
@@ -115,8 +115,30 @@ def supports_job_sessions(sdk: VeeamSdk) -> bool:
     return sdk.accepts(JOB_SESSIONS_OPERATION, "status")
 
 
-def supports_repository_maintenance(sdk: VeeamSdk) -> bool:
-    return sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION)
+def parse_version(text: str | None) -> tuple[int, ...] | None:
+    """A product version such as "8.6.0.1004" as a tuple of numbers; None if unreadable."""
+    if not text:
+        return None
+    parts: list[int] = []
+    for part in str(text).strip().split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts) or None
+
+
+def supports_repository_maintenance(sdk: VeeamSdk, server_version: tuple[int, ...] | None) -> bool:
+    """Whether the API has maintenance sessions and the server is new enough to serve them.
+
+    An unknown server version counts as too old: guessing wrong the other way would poll an
+    endpoint that is not there on every update, and show entities that never work.
+    """
+    return (
+        sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION)
+        and server_version is not None
+        and server_version >= MAINTENANCE_MIN_SERVER_VERSION
+    )
 
 
 def supports_protected_counts(sdk: VeeamSdk) -> bool:
@@ -149,6 +171,10 @@ BYTES_PER_GIB = 1024**3
 
 class EndpointError(Exception):
     """An endpoint answered, but with an error or something that is not its data."""
+
+
+class EndpointUnsupported(Exception):
+    """This server does not serve the endpoint, so it is not asked and nothing is failing."""
 
 
 # ---------------------------------------------------------------------------
@@ -747,9 +773,7 @@ class _VeeamCalls:
             raise EndpointError(error_message(response))
         return response
 
-    async def _pages(
-        self, operation: str, page_limit: int = PAGE_LIMIT, **kwargs: Any
-    ) -> AsyncIterator[list[Any]]:
+    async def _pages(self, operation: str, **kwargs: Any) -> AsyncIterator[list[Any]]:
         """Each page of a collection in turn, following v8's pagination."""
         if not self.sdk.accepts(operation, "limit"):
             yield collection_items(await self._call(operation, **kwargs))
@@ -758,12 +782,12 @@ class _VeeamCalls:
         offset = 0
         seen = 0
         for _ in range(MAX_PAGES):
-            response = await self._call(operation, limit=page_limit, offset=offset, **kwargs)
+            response = await self._call(operation, limit=PAGE_LIMIT, offset=offset, **kwargs)
             page = collection_items(response)
             seen += len(page)
             yield page
             # The server may cap the page size below what was asked for, and says so
-            limit = field(response, "limit") or page_limit
+            limit = field(response, "limit") or PAGE_LIMIT
             if not page or len(page) < limit:
                 return
             offset += len(page)
@@ -775,12 +799,10 @@ class _VeeamCalls:
             seen,
         )
 
-    async def _fetch_collection(
-        self, operation: str, page_limit: int = PAGE_LIMIT, **kwargs: Any
-    ) -> list[Any]:
+    async def _fetch_collection(self, operation: str, **kwargs: Any) -> list[Any]:
         """Every item of a collection."""
         items: list[Any] = []
-        async for page in self._pages(operation, page_limit=page_limit, **kwargs):
+        async for page in self._pages(operation, **kwargs):
             items.extend(page)
         return items
 
@@ -811,6 +833,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         # what is new, and when that last asking ran successfully
         self._job_sessions: dict[str, dict[str, Any]] = {}
         self._job_sessions_since: Any = None
+        # Parsed from the last server info that could be read (see server_version)
+        self._server_version: tuple[int, ...] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -848,6 +872,14 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         self._update_license_issue(data)
         return data
 
+    @property
+    def server_version(self) -> tuple[int, ...] | None:
+        """The VB365 product version, as last reported; None until it has been read.
+
+        Some endpoints of one API version are only served from a given product version on.
+        """
+        return self._server_version
+
     def _update_license_issue(self, data: dict[str, Any]) -> None:
         """Re-evaluate the unsupported-license repair when the answer changes."""
         if not fetch_succeeded(data, "license_info"):
@@ -876,7 +908,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             fetchers["organization_sync"] = lambda: self._fetch_organization_sync(
                 data["organizations"]
             )
-        if supports_repository_maintenance(self.sdk):
+        if self.sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION):
+            # Decided when it runs, after this poll's server info: see the method
             fetchers["repository_maintenance"] = self._fetch_repository_maintenance
         if supports_job_sessions(self.sdk):
             fetchers["job_sessions"] = self._fetch_job_sessions
@@ -892,6 +925,10 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
                 fetch_ok[key] = True
             except (VeeamAuthenticationError, VeeamSessionError):
                 raise
+            except EndpointUnsupported:
+                # Not asked, so neither answered nor failed: no fetch_ok entry
+                data[key] = ENDPOINT_DEFAULTS[key]
+                continue
             except EndpointError as err:
                 errors[key] = str(err)
             except VeeamError as err:
@@ -1025,9 +1062,7 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
 
         seen: dict[str, dict[str, Any]] = {}
         for kwargs in ({"status": running_filter}, {"end_time_lower_bound": since}):
-            items = await self._fetch_collection(
-                JOB_SESSIONS_OPERATION, page_limit=JOB_SESSIONS_PAGE_LIMIT, **kwargs
-            )
+            items = await self._fetch_collection(JOB_SESSIONS_OPERATION, **kwargs)
             for session in parse_items(
                 "job sessions", items, lambda item: parse_job_session(item, started)
             ):
@@ -1058,6 +1093,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         return dict(self._job_sessions)
 
     async def _fetch_repository_maintenance(self) -> dict[str, dict[str, Any]]:
+        if not supports_repository_maintenance(self.sdk, self.server_version):
+            raise EndpointUnsupported
         sessions = parse_items(
             "maintenance sessions",
             await self._fetch_collection(MAINTENANCE_SESSIONS_OPERATION),
@@ -1066,7 +1103,11 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         return maintenance_by_repository(sessions)
 
     async def _fetch_server_info(self) -> dict[str, Any]:
-        return parse_server_info(await self._call("service_instance.service_instance_get"))
+        server_info = parse_server_info(await self._call("service_instance.service_instance_get"))
+        version = parse_version(server_info.get("version"))
+        if version is not None:
+            self._server_version = version
+        return server_info
 
     async def _fetch_license(self) -> dict[str, Any]:
         license_data = await self._call("license_.license_get")
@@ -1170,7 +1211,7 @@ class VeeamProtectedCountsCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[st
     async def _count(self, operation: str) -> dict[str, int]:
         """How many items of one kind each organization has."""
         per_organization: dict[str, int] = {}
-        async for page in self._pages(operation, page_limit=PROTECTED_PAGE_LIMIT):
+        async for page in self._pages(operation):
             for item in page:
                 org_id = id_field(item, "organization_id")
                 if org_id is not None:

@@ -161,14 +161,15 @@ async def test_list_responses_of_older_versions(
 
 
 async def test_v8_collections_are_paged(hass: HomeAssistant, server: FakeServer) -> None:
-    """The server defaults to 30 per page, which truncated larger installations."""
+    """The server defaults to 30 per page, which truncated larger installations. Asking for
+    its maximum of 10,000 lists anything short of that in one request."""
     server.collections["job.job_get"] = [
         job_json(job_id=f"00000000-0000-0000-0000-{index:012d}", name=f"Job {index}")
         for index in range(250)
     ]
     entry = await setup_entry(hass)
 
-    assert [call["offset"] for call in server.calls_to("job.job_get")] == [0, 100, 200]
+    assert server.calls_to("job.job_get") == [{"limit": 10000, "offset": 0}]
     assert len(entry.runtime_data["coordinator"].data["jobs"]) == 250
 
 
@@ -673,7 +674,7 @@ async def test_proxies_get_a_device_each(hass: HomeAssistant, server: FakeServer
     assert device is not None and device.name == "VB365 Proxy proxy01"
     assert device.model == "Backup Proxy"
     # v8 pages the proxies like every other collection
-    assert server.calls_to(PROXIES) == [{"limit": 100, "offset": 0}]
+    assert server.calls_to(PROXIES) == [{"limit": 10000, "offset": 0}]
 
 
 async def test_maintenance_and_going_offline_follow_the_server(
@@ -939,8 +940,7 @@ async def test_protected_objects_are_counted_per_organization(
     assert state(hass, f"sensor.{ORG}_protected_sites") == "2"
     # Counted, and there are none: zero rather than unknown
     assert state(hass, f"sensor.{ORG}_protected_teams") == "0"
-    # In large pages, not the regular poll's 100
-    assert server.calls_to(PROTECTED_USERS) == [{"limit": 1000, "offset": 0}]
+    assert server.calls_to(PROTECTED_USERS) == [{"limit": 10000, "offset": 0}]
     assert entry.runtime_data["protected_counts"].update_interval.total_seconds() == 3600
 
 
@@ -1043,7 +1043,7 @@ async def test_older_versions_count_nothing(
 
 
 # ---------------------------------------------------------------------------
-# Repository maintenance (API v8)
+# Repository maintenance (API v8, VB365 8.6 and later)
 # ---------------------------------------------------------------------------
 
 MAINTENANCE_SESSIONS = "repository_maintenance_session.repository_maintenance_sessions_get"
@@ -1053,8 +1053,14 @@ SESSION_1 = "a1a1a1a1-0000-0000-0000-000000000001"
 SESSION_2 = "a1a1a1a1-0000-0000-0000-000000000002"
 
 
+async def setup_maintenance_server(hass: HomeAssistant, server: FakeServer) -> MockConfigEntry:
+    """Set up against a VB365 8.6 server, the first to serve maintenance sessions."""
+    server.version = "8.6.0.1004"
+    return await setup_entry(hass)
+
+
 async def test_a_repository_never_in_maintenance(hass: HomeAssistant, server: FakeServer) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF
     status = hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status")
@@ -1065,7 +1071,7 @@ async def test_a_repository_never_in_maintenance(hass: HomeAssistant, server: Fa
 async def test_an_active_session_puts_its_repositories_in_maintenance(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    entry = await setup_entry(hass)
+    entry = await setup_maintenance_server(hass, server)
     server.collections[MAINTENANCE_SESSIONS] = [
         # An older, failed session on both repositories...
         maintenance_json(
@@ -1100,7 +1106,7 @@ async def test_an_active_session_wins_over_a_later_finished_one(
         maintenance_json(SESSION_1, "Preparing", "2026-09-28T08:00:00+00:00", [REPO_ID]),
         maintenance_json(SESSION_2, "Finished", "2026-09-28T09:00:00+00:00", [REPO_ID]),
     ]
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_ON
     assert state(hass, f"sensor.{LOCAL_REPO}_maintenance_status") == "Preparing"
@@ -1109,7 +1115,7 @@ async def test_an_active_session_wins_over_a_later_finished_one(
 async def test_start_maintenance_waits_rather_than_force_stopping(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     await press(hass, f"button.{LOCAL_REPO}_start_maintenance")
 
@@ -1130,7 +1136,7 @@ async def test_stop_maintenance_stops_the_active_session(
     server.collections[MAINTENANCE_SESSIONS] = [
         maintenance_json(SESSION_2, "Running", "2026-09-28T09:00:00+00:00", [REPO_ID])
     ]
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
 
@@ -1140,7 +1146,7 @@ async def test_stop_maintenance_stops_the_active_session(
 async def test_stop_maintenance_without_a_session_says_so(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    await setup_entry(hass)
+    await setup_maintenance_server(hass, server)
 
     with pytest.raises(HomeAssistantError) as raised:
         await press(hass, f"button.{LOCAL_REPO}_stop_maintenance")
@@ -1155,7 +1161,7 @@ async def test_stop_maintenance_without_a_session_says_so(
 async def test_a_failing_maintenance_endpoint_only_affects_maintenance(
     hass: HomeAssistant, server: FakeServer
 ) -> None:
-    entry = await setup_entry(hass)
+    entry = await setup_maintenance_server(hass, server)
     server.overrides[MAINTENANCE_SESSIONS] = server.error()
 
     await refresh(hass, entry)
@@ -1178,6 +1184,47 @@ async def test_older_versions_have_no_repository_maintenance(
     assert hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status") is None
     assert hass.states.get(f"button.{LOCAL_REPO}_start_maintenance") is None
     assert server.calls_to(MAINTENANCE_SESSIONS) == []
+
+
+@pytest.mark.parametrize("version", ["8.1.0.305", "8.5.0.2000"])
+async def test_servers_before_8_6_have_no_repository_maintenance(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    """API v8, but a server that does not serve the endpoint: not asked, and not failing."""
+    server.version = version
+    entry = await setup_entry(hass)
+    await refresh(hass, entry)
+
+    assert hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance") is None
+    assert hass.states.get(f"sensor.{LOCAL_REPO}_maintenance_status") is None
+    assert hass.states.get(f"button.{LOCAL_REPO}_start_maintenance") is None
+    assert hass.states.get(f"button.{LOCAL_REPO}_stop_maintenance") is None
+    assert server.calls_to(MAINTENANCE_SESSIONS) == []
+    assert "repository_maintenance" not in entry.runtime_data["coordinator"].data["fetch_ok"]
+    assert state(hass, f"binary_sensor.{SERVER}_health_ok") == STATE_ON
+
+
+async def test_an_unknown_server_version_counts_as_too_old(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.version = "8.6.0.1004"
+    server.overrides["service_instance.service_instance_get"] = server.error()
+    await setup_entry(hass)
+
+    assert hass.states.get(f"binary_sensor.{LOCAL_REPO}_maintenance") is None
+    assert server.calls_to(MAINTENANCE_SESSIONS) == []
+
+
+async def test_the_version_is_remembered_when_server_info_later_fails(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_maintenance_server(hass, server)
+    server.overrides["service_instance.service_instance_get"] = server.error()
+
+    await refresh(hass, entry)
+
+    assert len(server.calls_to(MAINTENANCE_SESSIONS)) == 2
+    assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF
 
 
 # ---------------------------------------------------------------------------
@@ -1230,8 +1277,8 @@ async def test_later_polls_only_ask_for_what_is_new(
     # The first poll looks back about a day; the next only to shortly before the first
     assert first[0] < dt_util.utcnow() - timedelta(hours=25)
     assert bounds[1] > dt_util.utcnow() - timedelta(minutes=15)
-    # Large pages; running sessions asked for separately
-    assert all(c["limit"] == 1000 for c in server.calls_to(JOB_SESSIONS))
+    # The largest pages the server allows; running sessions asked for separately
+    assert all(c["limit"] == 10000 for c in server.calls_to(JOB_SESSIONS))
     assert sum("status" in c for c in server.calls_to(JOB_SESSIONS)) == 2
 
 

@@ -370,6 +370,8 @@ class FakeServer:
                 "5e550003-0000-0000-0000-000000000000", COPY_JOB_ID, 30, status="Warning"
             ),
         ]
+        # The product version /ServiceInstance reports; some v8 endpoints need a newer one
+        self.version = "8.1.0.305"
         self.health = health_json()
         # Operation name -> a result, an exception to raise, or a callable(**kwargs)
         self.overrides: dict[str, Any] = {}
@@ -413,7 +415,7 @@ class FakeServer:
             return self._collection(name, kwargs)
         if name == "service_instance.service_instance_get":
             return self.models.RESTServiceInstance.from_dict(
-                {"installationId": INSTALLATION_ID, "version": "8.1.0.305"}
+                {"installationId": INSTALLATION_ID, "version": self.version}
             )
         if name == "license_.license_get":
             return self.models.RESTLicense.from_dict(self.license)
