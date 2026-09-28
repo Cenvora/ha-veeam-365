@@ -6,6 +6,12 @@ blueprint:
 
     Pick the **Last Status** sensors of the jobs you care about. Backup jobs and backup copy
     jobs both have one, so either can be watched here.
+
+    Works on every API version by watching the Last Status sensor. On API v8 the integration
+    also follows the server's live event feed, and this blueprint listens to its
+    `veeam_365_job_session` events too: that catches a job that fails again right after a
+    previous failure, which leaves Last Status unchanged. Each failure is reported once,
+    whichever of the two sees it first.
   domain: automation
   source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/job_failed.yaml
   author: Cenvora
@@ -30,7 +36,9 @@ blueprint:
       name: Notification action
       description: >-
         What to run when a job fails. These variables are available: `job_name`,
-        `job_status`, `job_entity_id`, and ready-made `title` and `message`.
+        `job_status`, `job_entity_id`, `session_id` and `session_details` (the session's
+        own message, when the server reported one; empty otherwise), and ready-made `title`
+        and `message`.
       selector:
         action:
 
@@ -41,31 +49,117 @@ max: 25
 triggers:
   - trigger: state
     entity_id: !input job_status_sensors
+    id: status
+  # API v8 only: fired by the integration as soon as a session's status changes
+  - trigger: event
+    event_type: veeam_365_job_session
+    id: session
 
 variables:
   include_warnings: !input include_warnings
+  job_status_sensors: !input job_status_sensors
   # RESTJobLastStatus is Success / Warning / Failed / Running / Stopped / Queued /
-  # Disconnected / NotConfigured. Compared lower-cased because the Veeam API has shipped
-  # different casing for other enums between versions.
+  # Disconnected / NotConfigured, and a session event reports the same words. Compared
+  # lower-cased because the Veeam API has shipped different casing for other enums between
+  # versions.
   bad_results: "{{ ['failed', 'warning'] if include_warnings else ['failed'] }}"
-  job_status: "{{ trigger.to_state.state }}"
-  job_entity_id: "{{ trigger.entity_id }}"
-  # Each job is its own device, so the device name is the job name
+  # A session event names its job by ID; the job's device is identified by it, so find the
+  # watched sensor on that device. Empty when the job is not one of the watched ones.
+  job_entity_id: >-
+    {%- if trigger.id == 'session' -%}
+      {%- set job_id = (trigger.event.data.job_id or '') | string | lower -%}
+      {%- set wanted = ['job_' ~ job_id, 'copy_job_' ~ job_id] -%}
+      {%- set ns = namespace(found='') -%}
+      {%- for entity_id in job_status_sensors if job_id -%}
+        {%- for identifier in device_attr(entity_id, 'identifiers') or [] -%}
+          {%- if not ns.found and identifier[0] == 'veeam_365'
+                and identifier[1] | string | lower in wanted -%}
+            {%- set ns.found = entity_id -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ ns.found }}
+    {%- else -%}
+      {{ trigger.entity_id }}
+    {%- endif -%}
+  job_status: >-
+    {{ (trigger.event.data.status or '') if trigger.id == 'session'
+       else trigger.to_state.state }}
+  # Each job is its own device, so the device name is the job name. Devices are named
+  # "VB365 Job <name>" (or "VB365 <name>" when the name already says Job); the prefix is left
+  # out of messages, and older unprefixed names pass through unchanged.
   job_name: >-
-    {{ device_attr(trigger.entity_id, 'name_by_user')
-       or device_attr(trigger.entity_id, 'name')
-       or trigger.to_state.name | replace(' Last Status', '') }}
-  title: "Veeam 365 backup failed: {{ job_name }}"
-  message: "Veeam 365 job {{ job_name }} finished with status {{ job_status }}."
+    {%- set by_user = device_attr(job_entity_id, 'name_by_user') if job_entity_id else none -%}
+    {%- set name = device_attr(job_entity_id, 'name') if job_entity_id else none -%}
+    {%- if by_user -%}
+      {{ by_user }}
+    {%- elif name -%}
+      {{ name | regex_replace('^VB365 (Copy Job |Job )?', '') }}
+    {%- elif trigger.id == 'session' -%}
+      {{ trigger.event.data.job_name or 'Unknown job' }}
+    {%- else -%}
+      {{ trigger.to_state.name | replace(' Last Status', '') }}
+    {%- endif -%}
+  # The job's Last Session sensor (API v8), found by the attribute only it has rather than by
+  # its entity ID, which the user may have renamed
+  last_session_entity: >-
+    {%- set ns = namespace(found='') -%}
+    {%- set device = device_id(job_entity_id) if job_entity_id else none -%}
+    {%- for entity_id in (device_entities(device) if device else []) -%}
+      {%- if not ns.found and entity_id.startswith('sensor.')
+            and state_attr(entity_id, 'will_retry') is not none -%}
+        {%- set ns.found = entity_id -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.found }}
+  # On a status change the sensor was refreshed by the same poll, so it describes this
+  # session. On an event it may still describe the previous one until the next poll.
+  session_id: >-
+    {{ trigger.event.data.session_id if trigger.id == 'session'
+       else (state_attr(last_session_entity, 'session_id') or '' if last_session_entity
+             else '') }}
+  session_details: >-
+    {%- if last_session_entity
+          and state_attr(last_session_entity, 'session_id') | string == session_id | string -%}
+      {{ state_attr(last_session_entity, 'details') or '' }}
+    {%- endif -%}
+  # A session event is only needed when the Last Status sensor will not change to report the
+  # same result: it already shows it from an earlier run, or it is unavailable (and the
+  # status trigger ignores coming back from unavailable). Otherwise the next poll moves the
+  # sensor and the status trigger reports it. The same status set within this many seconds
+  # was reported by the status trigger itself, when a poll happened to see it first.
+  already_reported_within: 300
+  event_needed: >-
+    {%- if trigger.id != 'session' or not job_entity_id -%}
+      false
+    {%- else -%}
+      {%- set current = states(job_entity_id) | lower -%}
+      {%- set changed = states[job_entity_id].last_changed if states[job_entity_id] else none -%}
+      {{ current in ['unknown', 'unavailable']
+         or (current == job_status | lower
+             and changed is not none
+             and (now() - changed).total_seconds() > already_reported_within | int) }}
+    {%- endif -%}
+  title: >-
+    {{ 'Veeam 365 backup warning: ' ~ job_name if job_status | lower == 'warning'
+       else 'Veeam 365 backup failed: ' ~ job_name }}
+  message: >-
+    Veeam 365 job {{ job_name }} finished with status {{ job_status }}.
+    {{- '\n' ~ session_details if session_details else '' }}
 
 conditions:
   - condition: template
     value_template: "{{ job_status | lower in bad_results }}"
-  # Skip the transition out of unknown/unavailable after a restart or reload, which would
-  # otherwise re-notify about a failure that was already reported
-  - condition: template
-    value_template: >-
-      {{ trigger.from_state is not none
-         and trigger.from_state.state | lower not in ['unknown', 'unavailable'] }}
+  - condition: or
+    conditions:
+      # Skip the transition out of unknown/unavailable after a restart or reload, which
+      # would otherwise re-notify about a failure that was already reported
+      - condition: template
+        value_template: >-
+          {{ trigger.id == 'status'
+             and trigger.from_state is not none
+             and trigger.from_state.state | lower not in ['unknown', 'unavailable'] }}
+      - condition: template
+        value_template: "{{ trigger.id == 'session' and event_needed }}"
 
 actions: !input notification_action
