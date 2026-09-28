@@ -55,7 +55,9 @@ def test_buttons_only_call_loaded_operations(description):
 
 
 @pytest.mark.parametrize(
-    "description", button.ORGANIZATION_BUTTONS, ids=lambda description: description.operation
+    "description",
+    [*button.ORGANIZATION_BUTTONS, *button.REPOSITORY_MAINTENANCE_BUTTONS],
+    ids=lambda description: description.operation,
 )
 def test_versioned_buttons_are_loaded_where_they_exist(description):
     assert description.operation in sdk.VERSIONED_OPERATIONS
@@ -69,16 +71,21 @@ def test_button_id_arguments_match_the_operations(api_module):
         *button.JOB_BUTTONS,
         *button.COPY_JOB_BUTTONS,
         *button.REPOSITORY_BUTTONS,
+        *button.REPOSITORY_MAINTENANCE_BUTTONS,
         *button.ORGANIZATION_BUTTONS,
     ):
         if not loaded.has_operation(description.operation):
             # A version without it gets no button (see button.async_setup_entry)
             assert description.operation in sdk.VERSIONED_OPERATIONS
             continue
-        assert loaded.accepts(description.operation, description.id_param), (
-            api_module,
-            description.operation,
-        )
+        if description.id_param is None:
+            # The item goes in the body instead
+            assert description.body_fn is not None, description.operation
+        else:
+            assert loaded.accepts(description.operation, description.id_param), (
+                api_module,
+                description.operation,
+            )
         if loaded.accepts(description.operation, "body"):
             assert (
                 description.start_options or description.body_fn
@@ -93,5 +100,18 @@ def test_only_v8_collections_are_paged():
 @pytest.mark.parametrize("api_module", ["v7", "v8"])
 def test_the_organization_sync_body_builds_on_each_version(api_module):
     (description,) = button.ORGANIZATION_BUTTONS
-    body = description.body_fn(sdk.load_sdk(api_module).models)
+    body = description.body_fn(sdk.load_sdk(api_module).models, "org-1")
     assert body.to_dict() == {"type": "Incremental"}
+
+
+def test_starting_maintenance_never_force_stops_backups():
+    start = next(d for d in button.REPOSITORY_MAINTENANCE_BUTTONS if d.key == "start_maintenance")
+    body = start.body_fn(sdk.load_sdk("v8").models, "33333333-3333-3333-3333-333333333333")
+    assert body.to_dict() == {
+        "repositoryIds": ["33333333-3333-3333-3333-333333333333"],
+        "waitingConfig": {
+            "waitForSessionsTimeout": 60,
+            "forceStopSessions": False,
+            "forceStopSessionsTimeout": 10,
+        },
+    }

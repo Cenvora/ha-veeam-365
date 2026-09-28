@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "受保护的团队"
+      },
+      "repository_maintenance_status": {
+        "name": "维护状态"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "同步"
+      },
+      "repository_maintenance": {
+        "name": "维护"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "同步"
+      },
+      "repository_start_maintenance": {
+        "name": "开始维护"
+      },
+      "repository_stop_maintenance": {
+        "name": "停止维护"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "无法同步组织 {organization_name}：{error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "无法开始存储库 {repository_name} 的维护：{error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "无法停止存储库 {repository_name} 的维护：{error}"
     }
   },
   "issues": {

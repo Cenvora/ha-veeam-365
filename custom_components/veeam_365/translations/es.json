@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Equipos protegidos"
+      },
+      "repository_maintenance_status": {
+        "name": "Estado de mantenimiento"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Sincronización"
+      },
+      "repository_maintenance": {
+        "name": "Mantenimiento"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Sincronizar"
+      },
+      "repository_start_maintenance": {
+        "name": "Iniciar mantenimiento"
+      },
+      "repository_stop_maintenance": {
+        "name": "Detener mantenimiento"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "No se pudo sincronizar la organización {organization_name}: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "No se pudo iniciar el mantenimiento del repositorio {repository_name}: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "No se pudo detener el mantenimiento del repositorio {repository_name}: {error}"
     }
   },
   "issues": {

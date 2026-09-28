@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Beschermde teams"
+      },
+      "repository_maintenance_status": {
+        "name": "Onderhoudsstatus"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Synchronisatie"
+      },
+      "repository_maintenance": {
+        "name": "Onderhoud"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Synchroniseren"
+      },
+      "repository_start_maintenance": {
+        "name": "Onderhoud starten"
+      },
+      "repository_stop_maintenance": {
+        "name": "Onderhoud stoppen"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Synchroniseren van organisatie {organization_name} mislukt: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Onderhoud van repository {repository_name} starten mislukt: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Onderhoud van repository {repository_name} stoppen mislukt: {error}"
     }
   },
   "issues": {

@@ -28,9 +28,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .coordinator import HEALTH_OPERATION, supports_organization_sync
+from .coordinator import (
+    HEALTH_OPERATION,
+    supports_organization_sync,
+    supports_repository_maintenance,
+)
 from .entity import (
     OrganizationSyncMixin,
+    RepositoryMaintenanceMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
     VeeamServerEntity,
@@ -115,6 +120,23 @@ REPOSITORY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
     ),
 )
 
+# Read from the repository's current or latest maintenance session (API v8). No device
+# class: maintenance is deliberate, not a fault.
+REPOSITORY_MAINTENANCE_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
+        key="maintenance",
+        translation_key="repository_maintenance",
+        value_key="is_active",
+        icon_on="mdi:wrench",
+        icon_off="mdi:wrench-check",
+        attributes_fn=lambda session: {
+            "raw_value": session.get("status_raw"),
+            "session_id": session.get("session_id"),
+            "start_time": session.get("start_time"),
+        },
+    ),
+)
+
 PROXY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
     VeeamItemBinaryDescription(
         key="online",
@@ -186,13 +208,26 @@ async def async_setup_entry(
 
         return factory
 
-    async_track_items(
-        coordinator,
-        entry,
-        "repositories",
-        item_sensors("repositories", REPOSITORY_BINARY_SENSORS),
-        add,
+    # Decided once, at setup: a server upgraded to 8.6 gets these on the next restart
+    maintenance_supported = supports_repository_maintenance(
+        coordinator.sdk, coordinator.server_version
     )
+
+    def repository_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
+        entities: list[BinarySensorEntity] = [
+            VeeamItemBinarySensor(coordinator, entry, "repositories", item, description)
+            for description in REPOSITORY_BINARY_SENSORS
+        ]
+        if maintenance_supported:
+            entities.extend(
+                VeeamRepositoryMaintenanceBinarySensor(
+                    coordinator, entry, "repositories", item, description
+                )
+                for description in REPOSITORY_MAINTENANCE_BINARY_SENSORS
+            )
+        return entities
+
+    async_track_items(coordinator, entry, "repositories", repository_sensors, add)
     async_track_items(
         coordinator, entry, "proxies", item_sensors("proxies", PROXY_BINARY_SENSORS), add
     )
@@ -397,3 +432,7 @@ class VeeamItemBinarySensor(VeeamItemEntity, BinarySensorEntity):
 
 class VeeamOrganizationSyncBinarySensor(OrganizationSyncMixin, VeeamItemBinarySensor):
     """Problem when the last cache sync of an organization failed."""
+
+
+class VeeamRepositoryMaintenanceBinarySensor(RepositoryMaintenanceMixin, VeeamItemBinarySensor):
+    """On while a maintenance session suspends operations on the repository."""

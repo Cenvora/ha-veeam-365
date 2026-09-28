@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Geschützte Teams"
+      },
+      "repository_maintenance_status": {
+        "name": "Wartungsstatus"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Synchronisierung"
+      },
+      "repository_maintenance": {
+        "name": "Wartung"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Synchronisieren"
+      },
+      "repository_start_maintenance": {
+        "name": "Wartung starten"
+      },
+      "repository_stop_maintenance": {
+        "name": "Wartung beenden"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Organisation {organization_name} konnte nicht synchronisiert werden: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Wartung des Repositorys {repository_name} konnte nicht gestartet werden: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Wartung des Repositorys {repository_name} konnte nicht beendet werden: {error}"
     }
   },
   "issues": {

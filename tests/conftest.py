@@ -199,6 +199,24 @@ def protected_json(index: int, org_id: str = ORG_ID) -> dict:
     }
 
 
+def maintenance_json(
+    session_id: str, status: str, start: str, repository_ids: list[str], **overrides
+) -> dict:
+    data = {
+        "id": session_id,
+        "status": status,
+        "startTime": start,
+        "repositoryIds": repository_ids,
+        "waitingConfig": {
+            "waitForSessionsTimeout": 60,
+            "forceStopSessions": False,
+            "forceStopSessionsTimeout": 10,
+        },
+    }
+    data.update(overrides)
+    return data
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -254,6 +272,10 @@ PAGE_CLASSES = {
         "RESTProtectedTeam",
         "PageOfRESTProtectedTeam",
     ),
+    "repository_maintenance_session.repository_maintenance_sessions_get": (
+        "RESTBackupRepositoryMaintenanceSession",
+        "PageOfRESTBackupRepositoryMaintenanceSession",
+    ),
 }
 
 
@@ -286,6 +308,8 @@ class FakeServer:
             ],
             # No teams at all
             "protected_data.protected_data_get_protected_teams": [],
+            # No repository has ever been under maintenance
+            "repository_maintenance_session.repository_maintenance_sessions_get": [],
         }
         # Per organization ID
         self.licensing: dict[str, dict] = {ORG_ID: {"licensedUsers": 250, "newUsers": 3}}
@@ -299,6 +323,8 @@ class FakeServer:
             }
         }
         self.license = license_json()
+        # The product version /ServiceInstance reports; some v8 endpoints need a newer one
+        self.version = "8.1.0.305"
         self.health = health_json()
         # Operation name -> a result, an exception to raise, or a callable(**kwargs)
         self.overrides: dict[str, Any] = {}
@@ -335,7 +361,7 @@ class FakeServer:
             return self._collection(name, kwargs)
         if name == "service_instance.service_instance_get":
             return self.models.RESTServiceInstance.from_dict(
-                {"installationId": INSTALLATION_ID, "version": "8.1.0.305"}
+                {"installationId": INSTALLATION_ID, "version": self.version}
             )
         if name == "license_.license_get":
             return self.models.RESTLicense.from_dict(self.license)

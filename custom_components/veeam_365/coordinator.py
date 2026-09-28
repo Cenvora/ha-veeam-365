@@ -63,6 +63,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "proxies": [],
     "organizations": [],
     "organization_sync": {},
+    "repository_maintenance": {},
     "health": None,
 }
 
@@ -86,6 +87,44 @@ PROTECTED_OPERATIONS: dict[str, str] = {
     "sites": "protected_data.protected_data_get_protected_sites",
     "teams": "protected_data.protected_data_get_protected_teams",
 }
+
+
+# Repository maintenance sessions: VB365 suspends every operation on the repositories a
+# session names while it is active. In the v8 API, but only served by VB365 8.6 and later —
+# an older 8.x server answers the same API version without them.
+MAINTENANCE_SESSIONS_OPERATION = (
+    "repository_maintenance_session.repository_maintenance_sessions_get"
+)
+MAINTENANCE_MIN_SERVER_VERSION = (8, 6)
+ACTIVE_MAINTENANCE_STATUSES = frozenset(
+    {"Initialized", "Preparing", "Running", "Finishing", "Canceling", "Failing"}
+)
+
+
+def parse_version(text: str | None) -> tuple[int, ...] | None:
+    """A product version such as "8.6.0.1004" as a tuple of numbers; None if unreadable."""
+    if not text:
+        return None
+    parts: list[int] = []
+    for part in str(text).strip().split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts) or None
+
+
+def supports_repository_maintenance(sdk: VeeamSdk, server_version: tuple[int, ...] | None) -> bool:
+    """Whether the API has maintenance sessions and the server is new enough to serve them.
+
+    An unknown server version counts as too old: guessing wrong the other way would poll an
+    endpoint that is not there on every update, and show entities that never work.
+    """
+    return (
+        sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION)
+        and server_version is not None
+        and server_version >= MAINTENANCE_MIN_SERVER_VERSION
+    )
 
 
 def supports_protected_counts(sdk: VeeamSdk) -> bool:
@@ -118,6 +157,10 @@ BYTES_PER_GIB = 1024**3
 
 class EndpointError(Exception):
     """An endpoint answered, but with an error or something that is not its data."""
+
+
+class EndpointUnsupported(Exception):
+    """This server does not serve the endpoint, so it is not asked and nothing is failing."""
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +515,41 @@ def parse_sync_state(state: Any) -> dict[str, Any]:
     }
 
 
+def parse_maintenance_session(session: Any) -> dict[str, Any] | None:
+    session_id = id_field(session)
+    if session_id is None:
+        return None
+    status = text_field(session, "status")
+    return {
+        "session_id": session_id,
+        "status": humanize(status, "Unknown"),
+        "status_raw": status,
+        "is_active": status in ACTIVE_MAINTENANCE_STATUSES,
+        "start_time": field(session, "start_time"),
+        "end_time": field(session, "end_time"),
+        "error": text_field(session, "error_message"),
+        "repository_ids": [
+            str(repo_id) for repo_id in field(session, "repository_ids") or [] if repo_id
+        ],
+    }
+
+
+def maintenance_by_repository(sessions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each repository's session that matters: an active one, else the latest one."""
+
+    def rank(session: dict[str, Any]) -> tuple[bool, float]:
+        start = session.get("start_time")
+        return (session["is_active"], start.timestamp() if start else float("-inf"))
+
+    by_repository: dict[str, dict[str, Any]] = {}
+    for session in sessions:
+        for repo_id in session["repository_ids"]:
+            current = by_repository.get(repo_id)
+            if current is None or rank(session) > rank(current):
+                by_repository[repo_id] = session
+    return by_repository
+
+
 def parse_server_info(service_instance: Any) -> dict[str, Any]:
     return {
         "installation_id": id_field(service_instance, "installation_id"),
@@ -695,6 +773,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.sdk = sdk
         self._license_reason: str | None | bool = False  # False: not evaluated yet
+        # Parsed from the last server info that could be read (see server_version)
+        self._server_version: tuple[int, ...] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -732,6 +812,14 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         self._update_license_issue(data)
         return data
 
+    @property
+    def server_version(self) -> tuple[int, ...] | None:
+        """The VB365 product version, as last reported; None until it has been read.
+
+        Some endpoints of one API version are only served from a given product version on.
+        """
+        return self._server_version
+
     def _update_license_issue(self, data: dict[str, Any]) -> None:
         """Re-evaluate the unsupported-license repair when the answer changes."""
         if not fetch_succeeded(data, "license_info"):
@@ -760,6 +848,9 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             fetchers["organization_sync"] = lambda: self._fetch_organization_sync(
                 data["organizations"]
             )
+        if self.sdk.has_operation(MAINTENANCE_SESSIONS_OPERATION):
+            # Decided when it runs, after this poll's server info: see the method
+            fetchers["repository_maintenance"] = self._fetch_repository_maintenance
         if self.sdk.has_operation(HEALTH_OPERATION):
             fetchers["health"] = self._fetch_health
 
@@ -772,6 +863,10 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
                 fetch_ok[key] = True
             except (VeeamAuthenticationError, VeeamSessionError):
                 raise
+            except EndpointUnsupported:
+                # Not asked, so neither answered nor failed: no fetch_ok entry
+                data[key] = ENDPOINT_DEFAULTS[key]
+                continue
             except EndpointError as err:
                 errors[key] = str(err)
             except VeeamError as err:
@@ -888,8 +983,22 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             raise EndpointError(errors[0])
         return states
 
+    async def _fetch_repository_maintenance(self) -> dict[str, dict[str, Any]]:
+        if not supports_repository_maintenance(self.sdk, self.server_version):
+            raise EndpointUnsupported
+        sessions = parse_items(
+            "maintenance sessions",
+            await self._fetch_collection(MAINTENANCE_SESSIONS_OPERATION),
+            parse_maintenance_session,
+        )
+        return maintenance_by_repository(sessions)
+
     async def _fetch_server_info(self) -> dict[str, Any]:
-        return parse_server_info(await self._call("service_instance.service_instance_get"))
+        server_info = parse_server_info(await self._call("service_instance.service_instance_get"))
+        version = parse_version(server_info.get("version"))
+        if version is not None:
+            self._server_version = version
+        return server_info
 
     async def _fetch_license(self) -> dict[str, Any]:
         license_data = await self._call("license_.license_get")

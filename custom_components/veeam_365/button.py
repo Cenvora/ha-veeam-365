@@ -23,7 +23,13 @@ import httpx
 from veeam_365.exceptions import VeeamAuthenticationError, VeeamError
 
 from .const import ACTION_TIMEOUT, DOMAIN
-from .coordinator import describe_error, error_message, is_error_response
+from .coordinator import (
+    ACTIVE_MAINTENANCE_STATUSES,
+    describe_error,
+    error_message,
+    is_error_response,
+    supports_repository_maintenance,
+)
 from .entity import VeeamItemEntity, async_track_items
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,15 +46,21 @@ class VeeamButtonDescription(ButtonEntityDescription):
     """
 
     operation: str
-    # Name of the operation's ID argument, which differs between endpoints
-    id_param: str
+    # Name of the operation's ID argument, which differs between endpoints. None when the
+    # item is named in the request body instead.
+    id_param: str | None
     # Exception translation key, and the placeholder it names the item with
     failure_key: str
     name_placeholder: str = "job_name"
     # Whether the operation starts a job and takes RESTStartJobOptions
     start_options: bool = False
-    # Any other request body, built from the API version's models
-    body_fn: Callable[[Any], Any] | None = None
+    # Any other request body, built from the API version's models and the item ID
+    body_fn: Callable[[Any, str], Any] | None = None
+    # What to pass as id_param when it is not the item's own ID, looked up in the coordinator
+    # data by item ID. Returning None means there is nothing to act on, and the press fails
+    # with ``nothing_message``.
+    target_fn: Callable[[dict[str, Any], str], str | None] | None = None
+    nothing_message: str = ""
 
 
 def _job_buttons(prefix: str, api: str, id_param: str) -> tuple[VeeamButtonDescription, ...]:
@@ -92,6 +104,49 @@ REPOSITORY_BUTTONS = (
         name_placeholder="repository_name",
     ),
 )
+
+
+def _active_maintenance_session(data: dict[str, Any], repo_id: str) -> str | None:
+    session = (data.get("repository_maintenance") or {}).get(repo_id) or {}
+    if session.get("status_raw") in ACTIVE_MAINTENANCE_STATUSES:
+        return session.get("session_id")
+    return None
+
+
+# API v8. Starting waits up to an hour for the repository's running sessions to finish and
+# is canceled if they do not, rather than force-stopping backups in progress.
+REPOSITORY_MAINTENANCE_BUTTONS = (
+    VeeamButtonDescription(
+        key="start_maintenance",
+        translation_key="repository_start_maintenance",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:wrench",
+        operation="repository_maintenance_session.repository_maintenance_sessions_start_action",
+        id_param=None,
+        failure_key="repository_start_maintenance_failed",
+        name_placeholder="repository_name",
+        body_fn=lambda models, repo_id: (
+            models.RESTBackupRepositoryMaintenanceSessionStartRequest(
+                repository_ids=[repo_id],
+                waiting_config=models.RESTBackupRepositoryMaintenanceSessionWaitingConfig(
+                    wait_for_sessions_timeout=60, force_stop_sessions=False
+                ),
+            )
+        ),
+    ),
+    VeeamButtonDescription(
+        key="stop_maintenance",
+        translation_key="repository_stop_maintenance",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:wrench-check",
+        operation="repository_maintenance_session.repository_maintenance_sessions_stop_action",
+        id_param="session_id",
+        failure_key="repository_stop_maintenance_failed",
+        name_placeholder="repository_name",
+        target_fn=_active_maintenance_session,
+        nothing_message="the repository is not under maintenance",
+    ),
+)
 ORGANIZATION_BUTTONS = (
     VeeamButtonDescription(
         key="synchronize",
@@ -103,7 +158,7 @@ ORGANIZATION_BUTTONS = (
         failure_key="organization_synchronize_failed",
         name_placeholder="organization_name",
         # An incremental sync, as the console's Synchronize does by default
-        body_fn=lambda models: models.RESTOrganizationSyncOptions(
+        body_fn=lambda models, _item_id: models.RESTOrganizationSyncOptions(
             type_=models.RESTOrganizationSyncOptionsType.INCREMENTAL
         ),
     ),
@@ -136,7 +191,16 @@ async def async_setup_entry(
         coordinator,
         entry,
         "repositories",
-        factory("repositories", REPOSITORY_BUTTONS),
+        factory(
+            "repositories",
+            REPOSITORY_BUTTONS
+            # VB365 8.6 and later; decided once, at setup
+            + (
+                REPOSITORY_MAINTENANCE_BUTTONS
+                if supports_repository_maintenance(sdk, coordinator.server_version)
+                else ()
+            ),
+        ),
         async_add_entities,
     )
     async_track_items(
@@ -174,12 +238,19 @@ class VeeamButton(VeeamItemEntity, ButtonEntity):
         """Call the operation, and raise if the server did not accept it."""
         description = self.entity_description
         sdk = self.coordinator.sdk
-        kwargs: dict[str, Any] = {description.id_param: self.item_id}
+        kwargs: dict[str, Any] = {}
+        if description.id_param is not None:
+            target: str | None = self.item_id
+            if description.target_fn is not None:
+                target = description.target_fn(self.coordinator.data or {}, self.item_id)
+                if target is None:
+                    raise self._failure(description.nothing_message)
+            kwargs[description.id_param] = target
         if description.start_options and sdk.accepts(description.operation, "body"):
             # An incremental run, as the Start button in the console does
             kwargs["body"] = sdk.models.RESTStartJobOptions(full=False)
         elif description.body_fn is not None:
-            kwargs["body"] = description.body_fn(sdk.models)
+            kwargs["body"] = description.body_fn(sdk.models, self.item_id)
 
         try:
             async with asyncio.timeout(ACTION_TIMEOUT):

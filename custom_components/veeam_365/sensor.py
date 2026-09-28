@@ -23,9 +23,11 @@ from .coordinator import (
     VeeamProtectedCountsCoordinator,
     reports_sync_progress,
     supports_organization_sync,
+    supports_repository_maintenance,
 )
 from .entity import (
     OrganizationSyncMixin,
+    RepositoryMaintenanceMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
     VeeamServerEntity,
@@ -217,6 +219,33 @@ REPOSITORY_SENSORS: tuple[VeeamSensorDescription, ...] = (
         # Only meaningful when immutability is on and has a period
         exists_fn=lambda repo: bool(repo.get("is_immutable"))
         and repo.get("immutability_days") is not None,
+    ),
+)
+
+
+def _repository_maintenance_icon(session: dict[str, Any]) -> str:
+    if session.get("is_active"):
+        return "mdi:wrench"
+    if str(session.get("status_raw") or "").lower() == "failed":
+        return "mdi:wrench-clock-outline"
+    return "mdi:wrench-check"
+
+
+# Read from the repository's current or latest maintenance session (API v8)
+REPOSITORY_MAINTENANCE_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="maintenance_status",
+        translation_key="repository_maintenance_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda session: session.get("status"),
+        raw_key="status_raw",
+        icon_fn=_repository_maintenance_icon,
+        attributes_fn=lambda session: {
+            "session_id": session.get("session_id"),
+            "start_time": session.get("start_time"),
+            "end_time": session.get("end_time"),
+            "error": session.get("error"),
+        },
     ),
 )
 
@@ -482,13 +511,27 @@ async def async_setup_entry(
         _item_sensors("copy_jobs", COPY_JOB_SENSORS),
         async_add_entities,
     )
-    async_track_items(
-        coordinator,
-        entry,
-        "repositories",
-        _item_sensors("repositories", REPOSITORY_SENSORS),
-        async_add_entities,
+    # Decided once, at setup: a server upgraded to 8.6 gets these on the next restart
+    maintenance_supported = supports_repository_maintenance(
+        coordinator.sdk, coordinator.server_version
     )
+
+    def repository_sensors(item: dict[str, Any]) -> list[SensorEntity]:
+        entities: list[SensorEntity] = [
+            VeeamItemSensor(coordinator, entry, "repositories", item, description)
+            for description in REPOSITORY_SENSORS
+            if description.exists_fn(item)
+        ]
+        if maintenance_supported:
+            entities.extend(
+                VeeamRepositoryMaintenanceSensor(
+                    coordinator, entry, "repositories", item, description
+                )
+                for description in REPOSITORY_MAINTENANCE_SENSORS
+            )
+        return entities
+
+    async_track_items(coordinator, entry, "repositories", repository_sensors, async_add_entities)
     async_track_items(
         coordinator, entry, "proxies", _item_sensors("proxies", PROXY_SENSORS), async_add_entities
     )
@@ -584,6 +627,10 @@ class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
 
 class VeeamOrganizationSyncSensor(OrganizationSyncMixin, VeeamItemSensor):
     """A sensor on an organization device showing its cache sync state."""
+
+
+class VeeamRepositoryMaintenanceSensor(RepositoryMaintenanceMixin, VeeamItemSensor):
+    """A sensor on a repository device showing its maintenance session."""
 
 
 class VeeamServerSensor(VeeamServerEntity, _DescribedSensor):

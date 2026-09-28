@@ -55,6 +55,9 @@ VERSIONED_OPERATIONS: dict[str, str] = {
     "protected_data.protected_data_get_protected_groups": "v8",
     "protected_data.protected_data_get_protected_sites": "v8",
     "protected_data.protected_data_get_protected_teams": "v8",
+    "repository_maintenance_session.repository_maintenance_sessions_get": "v8",
+    "repository_maintenance_session.repository_maintenance_sessions_start_action": "v8",
+    "repository_maintenance_session.repository_maintenance_sessions_stop_action": "v8",
 }
 ACTION_OPERATIONS = (
     "job.job_start_action",

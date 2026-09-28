@@ -214,6 +214,9 @@
       },
       "organization_protected_teams": {
         "name": "Chronione zespoły"
+      },
+      "repository_maintenance_status": {
+        "name": "Stan konserwacji"
       }
     },
     "binary_sensor": {
@@ -249,6 +252,9 @@
       },
       "organization_sync": {
         "name": "Synchronizacja"
+      },
+      "repository_maintenance": {
+        "name": "Konserwacja"
       }
     },
     "button": {
@@ -281,6 +287,12 @@
       },
       "organization_synchronize": {
         "name": "Synchronizuj"
+      },
+      "repository_start_maintenance": {
+        "name": "Rozpocznij konserwację"
+      },
+      "repository_stop_maintenance": {
+        "name": "Zakończ konserwację"
       }
     }
   },
@@ -320,6 +332,12 @@
     },
     "organization_synchronize_failed": {
       "message": "Nie udało się zsynchronizować organizacji {organization_name}: {error}"
+    },
+    "repository_start_maintenance_failed": {
+      "message": "Nie udało się rozpocząć konserwacji repozytorium {repository_name}: {error}"
+    },
+    "repository_stop_maintenance_failed": {
+      "message": "Nie udało się zakończyć konserwacji repozytorium {repository_name}: {error}"
     }
   },
   "issues": {
