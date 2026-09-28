@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Operating System"
+      },
+      "organization_last_backup": {
+        "name": "Last Backup"
+      },
+      "organization_licensed_users": {
+        "name": "Licensed Users"
+      },
+      "organization_new_users": {
+        "name": "New Users"
+      },
+      "organization_type": {
+        "name": "Type"
+      },
+      "organization_region": {
+        "name": "Region"
+      },
+      "organization_last_sync": {
+        "name": "Last Sync"
+      },
+      "organization_sync_status": {
+        "name": "Sync Status"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Backed Up"
+      },
+      "organization_sync": {
+        "name": "Sync"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Disable"
+      },
+      "organization_synchronize": {
+        "name": "Synchronize"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Failed to disable copy job {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Failed to synchronize organization {organization_name}: {error}"
     }
   },
   "issues": {

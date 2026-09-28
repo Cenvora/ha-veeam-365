@@ -103,6 +103,7 @@ object it is:
 | Backup copy job | `VB365 Copy Job <copy job name>` |
 | Repository | `VB365 Repository <repository name>` |
 | Backup proxy | `VB365 Proxy <host name>` |
+| Microsoft 365 organization | `VB365 Organization <organization name>` |
 
 The kind is left out when the name already says it, so a job called "Daily Mail Job" is
 `VB365 Daily Mail Job`, not `VB365 Job Daily Mail Job`.
@@ -149,9 +150,10 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  repositories, proxies, license, server info, health report) answers with an error; the
-  `failed_endpoints` attribute says which. This is about whether the integration's polls get
-  answers, not about the server's own health — that is Service Health.
+  repositories, proxies, organizations, organization sync, license, server info, health
+  report) answers with an error; the `failed_endpoints` attribute says which. This is about
+  whether the integration's polls get answers, not about the server's own health — that is
+  Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
   (`/v8/Health`) says Unhealthy. The report covers the NATS server and the PostgreSQL
   configuration database: the `checks` attribute holds each one's status and description,
@@ -163,6 +165,9 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
   installations keep its `_online` entity ID.
 - Repository **Out of Date** (API v8) and **Immutable**, and license **Auto Update Enabled**.
 - Proxy **Online** — off when the server reports the backup proxy as Offline.
+- Organization **Sync** (API v7 and later) — Problem when the organization's last cache
+  synchronization with Microsoft 365 failed; the `error` attribute says why, and on API v8
+  `parts` breaks it down into users, groups, group members and sites.
 
 > [!IMPORTANT]
 > These entities previously lived in the `sensor` domain. Upgrading moves them: `sensor.*`
@@ -211,6 +216,14 @@ Enabled, with the untouched value as `raw_value`), CPU Usage and Memory Usage (%
 and Operating System sensors. An offline proxy reports no usage, so those read unknown until
 it is back. Maintenance mode is read-only: VB365 needs the proxy host's own administrator or
 SSH credentials to switch it, which this integration does not hold.
+
+Per **Microsoft 365 organization**: Last Backup (with the first backup, the tenant's
+Microsoft name and its protected services as attributes), Licensed Users, New Users, Type
+and Region sensors, and a Backed Up binary sensor. From API v7 the organization's cache sync
+adds the Sync binary sensor above, a Last Sync sensor and a **Synchronize** button, which
+starts an incremental sync as the console does. API v8 adds a Sync Status sensor (Idle,
+Queued or Running, with the next scheduled sync as `next_sync`). On v8 the sync state of
+every organization comes in one request; v7 asks for each organization separately.
 
 On the **server**: Product Version, Installation ID and Last Successful Poll sensors, and the
 Connected, Health OK and (API v8) Service Health binary sensors.

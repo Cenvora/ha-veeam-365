@@ -28,8 +28,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .coordinator import HEALTH_OPERATION
-from .entity import VeeamItemEntity, VeeamLicenseEntity, VeeamServerEntity, async_track_items
+from .coordinator import HEALTH_OPERATION, supports_organization_sync
+from .entity import (
+    OrganizationSyncMixin,
+    VeeamItemEntity,
+    VeeamLicenseEntity,
+    VeeamServerEntity,
+    async_track_items,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +66,7 @@ def _drop_superseded_sensor_entities(hass: HomeAssistant, entry: ConfigEntry, en
 
 @dataclass(frozen=True, kw_only=True)
 class VeeamItemBinaryDescription(BinarySensorEntityDescription):
-    """A flag of one repository or proxy. ``key`` is the unique ID suffix — never change it."""
+    """A flag of one item's device. ``key`` is the unique ID suffix — never change it."""
 
     value_key: str
     icon_on: str
@@ -127,6 +133,37 @@ PROXY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
     ),
 )
 
+# No device class: an organization without backups yet is not a fault
+ORGANIZATION_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
+        key="backed_up",
+        translation_key="organization_backed_up",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="is_backed_up",
+        icon_on="mdi:cloud-check",
+        icon_off="mdi:cloud-outline",
+    ),
+)
+
+# Read from the organization's sync state (API v7 and later)
+ORGANIZATION_SYNC_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
+        key="sync",
+        translation_key="organization_sync",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_key="has_sync_error",
+        icon_on="mdi:sync-alert",
+        icon_off="mdi:account-sync",
+        attributes_fn=lambda sync: {
+            "raw_value": sync.get("last_result"),
+            "error": sync.get("error"),
+            "last_sync": sync.get("last_sync"),
+            "type": sync.get("last_sync_type"),
+            "parts": sync.get("parts") or {},
+        },
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -159,6 +196,24 @@ async def async_setup_entry(
     async_track_items(
         coordinator, entry, "proxies", item_sensors("proxies", PROXY_BINARY_SENSORS), add
     )
+
+    sync_supported = supports_organization_sync(coordinator.sdk)
+
+    def organization_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
+        entities: list[BinarySensorEntity] = [
+            VeeamItemBinarySensor(coordinator, entry, "organizations", item, description)
+            for description in ORGANIZATION_BINARY_SENSORS
+        ]
+        if sync_supported:
+            entities.extend(
+                VeeamOrganizationSyncBinarySensor(
+                    coordinator, entry, "organizations", item, description
+                )
+                for description in ORGANIZATION_SYNC_BINARY_SENSORS
+            )
+        return entities
+
+    async_track_items(coordinator, entry, "organizations", organization_sensors, add)
 
     server_sensors: list[BinarySensorEntity] = [
         VeeamServerHealthOkSensor(coordinator, entry),
@@ -309,7 +364,7 @@ class VeeamLicenseAutoUpdateSensor(VeeamLicenseEntity, BinarySensorEntity):
 
 
 class VeeamItemBinarySensor(VeeamItemEntity, BinarySensorEntity):
-    """One flag of a repository or proxy. Unknown on API versions that do not report it."""
+    """One flag of an item. Unknown on API versions that do not report it."""
 
     entity_description: VeeamItemBinaryDescription
 
@@ -319,19 +374,26 @@ class VeeamItemBinarySensor(VeeamItemEntity, BinarySensorEntity):
             coordinator, entry, key, item, description.key, description.translation_key
         )
 
+    def _source(self) -> dict[str, Any] | None:
+        return self.item
+
     @property
     def is_on(self) -> bool | None:
-        item = self.item
-        value = item.get(self.entity_description.value_key) if item else None
+        source = self._source()
+        value = source.get(self.entity_description.value_key) if source else None
         return None if value is None else bool(value)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         attributes_fn = self.entity_description.attributes_fn
-        item = self.item
-        return attributes_fn(item) if attributes_fn and item else None
+        source = self._source()
+        return attributes_fn(source) if attributes_fn and source else None
 
     @property
     def icon(self) -> str:
         description = self.entity_description
         return description.icon_on if self.is_on else description.icon_off
+
+
+class VeeamOrganizationSyncBinarySensor(OrganizationSyncMixin, VeeamItemBinarySensor):
+    """Problem when the last cache sync of an organization failed."""

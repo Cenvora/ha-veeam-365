@@ -174,6 +174,9 @@ def test_every_translation_key_in_code_exists():
         *sensor.COPY_JOB_SENSORS,
         *sensor.REPOSITORY_SENSORS,
         *sensor.PROXY_SENSORS,
+        *sensor.ORGANIZATION_SENSORS,
+        *sensor.ORGANIZATION_SYNC_SENSORS,
+        *sensor.ORGANIZATION_SYNC_PROGRESS_SENSORS,
         *sensor.SERVER_SENSORS,
         *sensor.LICENSE_SENSORS,
     ):
@@ -181,9 +184,16 @@ def test_every_translation_key_in_code_exists():
     for description in (
         *binary_sensor.REPOSITORY_BINARY_SENSORS,
         *binary_sensor.PROXY_BINARY_SENSORS,
+        *binary_sensor.ORGANIZATION_BINARY_SENSORS,
+        *binary_sensor.ORGANIZATION_SYNC_BINARY_SENSORS,
     ):
         assert description.translation_key in entity["binary_sensor"]
-    for description in (*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS):
+    for description in (
+        *button.JOB_BUTTONS,
+        *button.COPY_JOB_BUTTONS,
+        *button.REPOSITORY_BUTTONS,
+        *button.ORGANIZATION_BUTTONS,
+    ):
         assert description.translation_key in entity["button"], description.translation_key
         assert description.failure_key in strings["exceptions"], description.failure_key
         message = strings["exceptions"][description.failure_key]["message"]

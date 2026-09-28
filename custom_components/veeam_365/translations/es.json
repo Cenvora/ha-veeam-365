@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Sistema operativo"
+      },
+      "organization_last_backup": {
+        "name": "Última copia de seguridad"
+      },
+      "organization_licensed_users": {
+        "name": "Usuarios con licencia"
+      },
+      "organization_new_users": {
+        "name": "Usuarios nuevos"
+      },
+      "organization_type": {
+        "name": "Tipo"
+      },
+      "organization_region": {
+        "name": "Región"
+      },
+      "organization_last_sync": {
+        "name": "Última sincronización"
+      },
+      "organization_sync_status": {
+        "name": "Estado de sincronización"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "En línea"
+      },
+      "organization_backed_up": {
+        "name": "Con copia de seguridad"
+      },
+      "organization_sync": {
+        "name": "Sincronización"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Deshabilitar"
+      },
+      "organization_synchronize": {
+        "name": "Sincronizar"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "No se pudo deshabilitar el trabajo de copia {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "No se pudo sincronizar la organización {organization_name}: {error}"
     }
   },
   "issues": {

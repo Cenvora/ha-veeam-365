@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "操作系统"
+      },
+      "organization_last_backup": {
+        "name": "上次备份"
+      },
+      "organization_licensed_users": {
+        "name": "已授权用户"
+      },
+      "organization_new_users": {
+        "name": "新用户"
+      },
+      "organization_type": {
+        "name": "类型"
+      },
+      "organization_region": {
+        "name": "区域"
+      },
+      "organization_last_sync": {
+        "name": "上次同步"
+      },
+      "organization_sync_status": {
+        "name": "同步状态"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "在线"
+      },
+      "organization_backed_up": {
+        "name": "已备份"
+      },
+      "organization_sync": {
+        "name": "同步"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "禁用"
+      },
+      "organization_synchronize": {
+        "name": "同步"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "禁用复制作业 {job_name} 失败：{error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "无法同步组织 {organization_name}：{error}"
     }
   },
   "issues": {

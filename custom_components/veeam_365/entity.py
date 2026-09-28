@@ -25,6 +25,7 @@ ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     "copy_jobs": ("copy_job", "Copy Job", "Backup Copy Job"),
     "repositories": ("repository", "Repository", "Backup Repository"),
     "proxies": ("proxy", "Proxy", "Backup Proxy"),
+    "organizations": ("organization", "Organization", "Microsoft 365 Organization"),
 }
 
 
@@ -121,7 +122,7 @@ class VeeamLicenseEntity(VeeamEntity):
 
 
 class VeeamItemEntity(VeeamEntity):
-    """An entity on the device of one job, copy job, repository or proxy."""
+    """An entity on the device of one job, copy job, repository, proxy or organization."""
 
     def __init__(
         self,
@@ -149,6 +150,32 @@ class VeeamItemEntity(VeeamEntity):
     @property
     def available(self) -> bool:
         return super().available and self.item is not None
+
+
+class OrganizationSyncMixin:
+    """For an entity on an organization device that shows its cache sync state.
+
+    The sync state is its own endpoint: unavailable while that fails, even though the
+    organization itself is still known. An organization the server reported no state for
+    reads unknown.
+    """
+
+    coordinator: VeeamCoordinator
+    item_id: str
+
+    @property
+    def sync(self) -> dict[str, Any] | None:
+        states = (self.coordinator.data or {}).get("organization_sync") or {}
+        return states.get(self.item_id)
+
+    def _source(self) -> dict[str, Any] | None:
+        return self.sync
+
+    @property
+    def available(self) -> bool:
+        return super().available and fetch_succeeded(  # type: ignore[misc]
+            self.coordinator.data, "organization_sync"
+        )
 
 
 def async_track_items(

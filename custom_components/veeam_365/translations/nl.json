@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Besturingssysteem"
+      },
+      "organization_last_backup": {
+        "name": "Laatste back-up"
+      },
+      "organization_licensed_users": {
+        "name": "Gelicentieerde gebruikers"
+      },
+      "organization_new_users": {
+        "name": "Nieuwe gebruikers"
+      },
+      "organization_type": {
+        "name": "Type"
+      },
+      "organization_region": {
+        "name": "Regio"
+      },
+      "organization_last_sync": {
+        "name": "Laatste synchronisatie"
+      },
+      "organization_sync_status": {
+        "name": "Synchronisatiestatus"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "organization_backed_up": {
+        "name": "Geback-upt"
+      },
+      "organization_sync": {
+        "name": "Synchronisatie"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Uitschakelen"
+      },
+      "organization_synchronize": {
+        "name": "Synchroniseren"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Uitschakelen van kopieertaak {job_name} mislukt: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Synchroniseren van organisatie {organization_name} mislukt: {error}"
     }
   },
   "issues": {

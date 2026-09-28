@@ -54,19 +54,44 @@ def test_buttons_only_call_loaded_operations(description):
     assert description.operation in sdk.ACTION_OPERATIONS
 
 
+@pytest.mark.parametrize(
+    "description", button.ORGANIZATION_BUTTONS, ids=lambda description: description.operation
+)
+def test_versioned_buttons_are_loaded_where_they_exist(description):
+    assert description.operation in sdk.VERSIONED_OPERATIONS
+
+
 @pytest.mark.parametrize("api_module", MODULES)
 def test_button_id_arguments_match_the_operations(api_module):
     """job_* actions take job_id, copy jobs take id, repositories repository_id."""
     loaded = sdk.load_sdk(api_module)
-    for description in (*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS):
+    for description in (
+        *button.JOB_BUTTONS,
+        *button.COPY_JOB_BUTTONS,
+        *button.REPOSITORY_BUTTONS,
+        *button.ORGANIZATION_BUTTONS,
+    ):
+        if not loaded.has_operation(description.operation):
+            # A version without it gets no button (see button.async_setup_entry)
+            assert description.operation in sdk.VERSIONED_OPERATIONS
+            continue
         assert loaded.accepts(description.operation, description.id_param), (
             api_module,
             description.operation,
         )
         if loaded.accepts(description.operation, "body"):
-            assert description.start_options, f"{description.operation} needs a body"
+            assert (
+                description.start_options or description.body_fn
+            ), f"{description.operation} needs a body"
 
 
 def test_only_v8_collections_are_paged():
     assert sdk.load_sdk("v8").accepts("job.job_get", "limit")
     assert not sdk.load_sdk("v7").accepts("job.job_get", "limit")
+
+
+@pytest.mark.parametrize("api_module", ["v7", "v8"])
+def test_the_organization_sync_body_builds_on_each_version(api_module):
+    (description,) = button.ORGANIZATION_BUTTONS
+    body = description.body_fn(sdk.load_sdk(api_module).models)
+    assert body.to_dict() == {"type": "Incremental"}

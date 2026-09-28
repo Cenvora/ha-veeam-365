@@ -181,6 +181,27 @@
       },
       "proxy_operating_system": {
         "name": "Операционная система"
+      },
+      "organization_last_backup": {
+        "name": "Последняя резервная копия"
+      },
+      "organization_licensed_users": {
+        "name": "Лицензированные пользователи"
+      },
+      "organization_new_users": {
+        "name": "Новые пользователи"
+      },
+      "organization_type": {
+        "name": "Тип"
+      },
+      "organization_region": {
+        "name": "Регион"
+      },
+      "organization_last_sync": {
+        "name": "Последняя синхронизация"
+      },
+      "organization_sync_status": {
+        "name": "Состояние синхронизации"
       }
     },
     "binary_sensor": {
@@ -210,6 +231,12 @@
       },
       "proxy_online": {
         "name": "В сети"
+      },
+      "organization_backed_up": {
+        "name": "Резервная копия создана"
+      },
+      "organization_sync": {
+        "name": "Синхронизация"
       }
     },
     "button": {
@@ -239,6 +266,9 @@
       },
       "copy_job_disable": {
         "name": "Отключить"
+      },
+      "organization_synchronize": {
+        "name": "Синхронизировать"
       }
     }
   },
@@ -275,6 +305,9 @@
     },
     "copy_job_disable_failed": {
       "message": "Не удалось отключить задание копирования {job_name}: {error}"
+    },
+    "organization_synchronize_failed": {
+      "message": "Не удалось синхронизировать организацию {organization_name}: {error}"
     }
   },
   "issues": {
