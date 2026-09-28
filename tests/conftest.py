@@ -464,6 +464,8 @@ class FakeServer:
                 if session["id"] == str(kwargs["job_sessions_id"]):
                     return self.models.RESTJobSession.from_dict(session)
             return self.error("Job session not found")
+        if name == "organization.organization_get":
+            return self._organizations(kwargs)
         if name in self.collections:
             return self._collection(name, kwargs)
         if name == "service_instance.service_instance_get":
@@ -504,6 +506,16 @@ class FakeServer:
             bound = kwargs["end_time_lower_bound"]
             sessions = [s for s in sessions if datetime.fromisoformat(s["creationTime"]) >= bound]
         return self._collection("job_session.job_session_get", kwargs, sessions)
+
+    def _organizations(self, kwargs: dict) -> Any:
+        """Without the extended view the server leaves out whether and when it backed up."""
+        name = "organization.organization_get"
+        items = self.collections[name]
+        # v6 defaults to the extended view; v7 and v8 default to the short one
+        if not kwargs.get("extended_view", self.api_module == "v6"):
+            backup_fields = ("isBackedup", "firstBackuptime", "lastBackuptime")
+            items = [{k: v for k, v in item.items() if k not in backup_fields} for item in items]
+        return self._collection(name, kwargs, items)
 
     def _collection(self, name: str, kwargs: dict, items: list[dict] | None = None) -> Any:
         item_class, page_class = PAGE_CLASSES[name]

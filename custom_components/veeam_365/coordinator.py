@@ -75,6 +75,8 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
 # older versions it is not fetched at all rather than reported as a failing endpoint.
 HEALTH_OPERATION = "health.health_get"
 
+ORGANIZATIONS_OPERATION = "organization.organization_get"
+
 # Organization cache synchronization state: every organization in one call from v8, one
 # call per organization on v7, not at all on v6
 SYNC_STATES_OPERATION = "organization_sync.organization_sync_get_states"
@@ -1023,7 +1025,13 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _fetch_organizations(self) -> list[dict[str, Any]]:
-        items = await self._fetch_collection("organization.organization_get")
+        # Only the extended view says whether and when an organization was backed up. v6 shows
+        # it by default; v7 and v8 default to the short view, which leaves Backed Up and Last
+        # Backup unknown
+        extended = {}
+        if self.sdk.accepts(ORGANIZATIONS_OPERATION, "extended_view"):
+            extended["extended_view"] = True
+        items = await self._fetch_collection(ORGANIZATIONS_OPERATION, **extended)
         organizations: list[dict[str, Any]] = []
         for org in items:
             # Licensing is a pair of counters; failing to read it should not cost the
