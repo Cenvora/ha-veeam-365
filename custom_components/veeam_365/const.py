@@ -50,6 +50,13 @@ MAX_PAGES = 100
 # v8 pages carry no total. So they are counted hourly, on a coordinator of their own with its
 # own time limit, in pages far larger than the minute-by-minute poll uses (the server allows
 # up to 10,000). A large tenant can then neither slow the regular poll nor fail it.
+# Job sessions: how far back the first poll after startup looks for each job's latest
+# session (later polls only ask for what is new), and the overlap between polls that keeps a
+# session created just as the previous poll ran from slipping through
+JOB_SESSIONS_LOOKBACK_HOURS = 26
+JOB_SESSIONS_OVERLAP_MINUTES = 10
+JOB_SESSIONS_PAGE_LIMIT = 1000
+
 PROTECTED_COUNT_INTERVAL = 3600  # seconds
 PROTECTED_COUNT_TIMEOUT = 900.0
 PROTECTED_PAGE_LIMIT = 1000

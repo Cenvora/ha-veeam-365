@@ -217,6 +217,21 @@
       },
       "repository_maintenance_status": {
         "name": "Состояние обслуживания"
+      },
+      "job_last_session": {
+        "name": "Последний сеанс"
+      },
+      "job_last_session_duration": {
+        "name": "Длительность последнего сеанса"
+      },
+      "job_last_session_transferred": {
+        "name": "Передано за последний сеанс"
+      },
+      "job_last_session_processed_objects": {
+        "name": "Обработано объектов за последний сеанс"
+      },
+      "job_last_session_processing_rate": {
+        "name": "Скорость обработки последнего сеанса"
       }
     },
     "binary_sensor": {

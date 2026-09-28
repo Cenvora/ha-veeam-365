@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import copy
+from datetime import datetime, timedelta
 from functools import cache
 from typing import Any
 from unittest.mock import patch
@@ -217,6 +218,43 @@ def maintenance_json(
     return data
 
 
+def job_session_json(
+    session_id: str,
+    job_id: str,
+    minutes_ago: int,
+    status: str = "Success",
+    duration_minutes: int | None = 15,
+    **overrides,
+) -> dict:
+    """A v8 job session created ``minutes_ago`` minutes before now."""
+    created = datetime.now().astimezone() - timedelta(minutes=minutes_ago)
+    data = {
+        "id": session_id,
+        "jobId": job_id,
+        "details": "All items processed successfully.",
+        "creationTime": created.isoformat(),
+        "retryCount": 0,
+        "jobWillBeRetried": False,
+        "progress": 120,
+        "jobType": "Backup",
+        "jobSessionConfigType": "Incremental",
+        "status": status,
+        "statistics": {
+            "processingRateBytesPS": 1048576,
+            "processingRateItemsPS": 1,
+            "readRateBytesPS": 1048576,
+            "writeRateBytesPS": 524288,
+            "transferredDataBytes": 1073741824,
+            "processedObjects": 120,
+            "bottleneck": "Source",
+        },
+    }
+    if duration_minutes is not None:
+        data["endTime"] = (created + timedelta(minutes=duration_minutes)).isoformat()
+    data.update(overrides)
+    return data
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -276,6 +314,7 @@ PAGE_CLASSES = {
         "RESTBackupRepositoryMaintenanceSession",
         "PageOfRESTBackupRepositoryMaintenanceSession",
     ),
+    "job_session.job_session_get": ("RESTJobSession", "PageOfRESTJobSession"),
 }
 
 
@@ -323,6 +362,14 @@ class FakeServer:
             }
         }
         self.license = license_json()
+        # Every job session the server knows, filtered as the server would (see answer)
+        self.job_sessions: list[dict] = [
+            job_session_json("5e550001-0000-0000-0000-000000000000", JOB_ID, 180),
+            job_session_json("5e550002-0000-0000-0000-000000000000", JOB_ID, 60),
+            job_session_json(
+                "5e550003-0000-0000-0000-000000000000", COPY_JOB_ID, 30, status="Warning"
+            ),
+        ]
         self.health = health_json()
         # Operation name -> a result, an exception to raise, or a callable(**kwargs)
         self.overrides: dict[str, Any] = {}
@@ -355,6 +402,13 @@ class FakeServer:
                 result = result(**kwargs)
             return result
 
+        if name == "job_session.job_session_get":
+            return self._job_sessions(kwargs)
+        if name == "job_session.job_session_get_by_id":
+            for session in self.job_sessions:
+                if session["id"] == str(kwargs["job_sessions_id"]):
+                    return self.models.RESTJobSession.from_dict(session)
+            return self.error("Job session not found")
         if name in self.collections:
             return self._collection(name, kwargs)
         if name == "service_instance.service_instance_get":
@@ -385,9 +439,21 @@ class FakeServer:
         # Actions answer 204 No Content, which the SDK returns as None
         return None
 
-    def _collection(self, name: str, kwargs: dict) -> Any:
+    def _job_sessions(self, kwargs: dict) -> Any:
+        """Filtered by status, or by creation time as the documentation describes."""
+        sessions = self.job_sessions
+        if "status" in kwargs:
+            wanted = kwargs["status"].value
+            sessions = [s for s in sessions if s["status"] == wanted]
+        if "end_time_lower_bound" in kwargs:
+            bound = kwargs["end_time_lower_bound"]
+            sessions = [s for s in sessions if datetime.fromisoformat(s["creationTime"]) >= bound]
+        return self._collection("job_session.job_session_get", kwargs, sessions)
+
+    def _collection(self, name: str, kwargs: dict, items: list[dict] | None = None) -> Any:
         item_class, page_class = PAGE_CLASSES[name]
-        items = self.collections[name]
+        if items is None:
+            items = self.collections[name]
         if not self.sdk.accepts(name, "limit"):
             # v6 and v7 return a plain list
             return [getattr(self.models, item_class).from_dict(item) for item in items]

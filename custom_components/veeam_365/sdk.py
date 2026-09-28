@@ -43,6 +43,9 @@ READ_OPERATIONS = (
     "proxy.proxy_get_proxies",
     "organization.organization_get",
     "organization_licensing_information.organization_licensing_information_get_license_count",
+    # In every version, but only v8's are used (see coordinator.supports_job_sessions)
+    "job_session.job_session_get",
+    "job_session.job_session_get_by_id",
 )
 # Operations only some API versions have, keyed by the first version that has them. load_sdk
 # skips what a version lacks, and callers check has_operation before using one.

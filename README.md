@@ -150,9 +150,9 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  repositories, repository maintenance, proxies, organizations, organization sync,
-  license, server info, health report) answers with an error; the `failed_endpoints`
-  attribute says which. This is about whether the integration's polls get answers, not
+  job sessions, repositories, repository maintenance, proxies, organizations,
+  organization sync, license, server info, health report) answers with an error; the
+  `failed_endpoints` attribute says which. This is about whether the integration's polls get answers, not
   about the server's own health — that is Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
   (`/v8/Health`) says Unhealthy. The report covers the NATS server and the PostgreSQL
@@ -205,6 +205,15 @@ Type, Enabled and Name sensors, plus Start, Stop, Enable and Disable buttons.
 
 Per **backup copy job**: Last Status, Last Run, Last Backup, Enabled and Name sensors, plus
 Start, Stop, Enable and Disable buttons.
+
+On API v8 both also show their **latest session**: Last Session (when it started, with its
+status, Full or Incremental, end time, details — the error message when it failed —, retries
+and bottleneck as attributes), Last Session Duration (so far, while it runs), Last Session
+Transferred, Last Session Processed Objects and Last Session Processing Rate. Sessions are
+found without paging through history on every poll: each poll asks for the running sessions
+and for those since the previous poll, and re-reads a session it last saw running once it
+has finished. After a restart the first poll looks back a day, so a job that has not run
+since reads unknown until its next run.
 
 Per **repository**: Type, Description, Used Space (GiB; local repositories report capacity
 minus free space, object storage repositories their used space) and, when immutability is

@@ -13,7 +13,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfDataRate,
+    UnitOfInformation,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -22,10 +28,12 @@ from .coordinator import (
     PROTECTED_OPERATIONS,
     VeeamProtectedCountsCoordinator,
     reports_sync_progress,
+    supports_job_sessions,
     supports_organization_sync,
     supports_repository_maintenance,
 )
 from .entity import (
+    JobSessionMixin,
     OrganizationSyncMixin,
     RepositoryMaintenanceMixin,
     VeeamItemEntity,
@@ -173,6 +181,70 @@ COPY_JOB_SENSORS: tuple[VeeamSensorDescription, ...] = (
         value_fn=lambda job: job.get("last_status"),
         raw_key="last_status_raw",
         icon_fn=_status_icon,
+    ),
+)
+
+
+def _session_attributes(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": session.get("session_id"),
+        "status": session.get("status"),
+        "raw_value": session.get("status_raw"),
+        "type": session.get("type"),
+        "end_time": session.get("end_time"),
+        "details": session.get("details"),
+        "retry_count": session.get("retry_count"),
+        "will_retry": session.get("will_retry"),
+        "bottleneck": session.get("bottleneck"),
+    }
+
+
+# Read from the job's latest session (API v8); shared by backup jobs and copy jobs
+JOB_SESSION_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="last_session",
+        translation_key="job_last_session",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:history",
+        value_fn=lambda session: session.get("creation_time"),
+        attributes_fn=_session_attributes,
+    ),
+    VeeamSensorDescription(
+        key="last_session_duration",
+        translation_key="job_last_session_duration",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=0,
+        icon="mdi:timer-outline",
+        value_fn=lambda session: session.get("duration_seconds"),
+    ),
+    VeeamSensorDescription(
+        key="last_session_transferred",
+        translation_key="job_last_session_transferred",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.MEBIBYTES,
+        suggested_display_precision=1,
+        icon="mdi:transfer",
+        value_fn=lambda session: session.get("transferred_bytes"),
+    ),
+    VeeamSensorDescription(
+        key="last_session_processed_objects",
+        translation_key="job_last_session_processed_objects",
+        icon="mdi:format-list-checks",
+        value_fn=lambda session: session.get("processed_objects"),
+    ),
+    VeeamSensorDescription(
+        key="last_session_processing_rate",
+        translation_key="job_last_session_processing_rate",
+        device_class=SensorDeviceClass.DATA_RATE,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEBIBYTES_PER_SECOND,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:speedometer",
+        value_fn=lambda session: session.get("processing_rate_bytes_per_second"),
     ),
 )
 
@@ -501,14 +573,30 @@ async def async_setup_entry(
 
         return factory
 
+    sessions_supported = supports_job_sessions(coordinator.sdk)
+
+    def _job_sensors(key: str, descriptions: tuple[VeeamSensorDescription, ...]):
+        item_factory = _item_sensors(key, descriptions)
+
+        def factory(item: dict[str, Any]) -> list[SensorEntity]:
+            entities: list[SensorEntity] = list(item_factory(item))
+            if sessions_supported:
+                entities.extend(
+                    VeeamJobSessionSensor(coordinator, entry, key, item, description)
+                    for description in JOB_SESSION_SENSORS
+                )
+            return entities
+
+        return factory
+
     async_track_items(
-        coordinator, entry, "jobs", _item_sensors("jobs", JOB_SENSORS), async_add_entities
+        coordinator, entry, "jobs", _job_sensors("jobs", JOB_SENSORS), async_add_entities
     )
     async_track_items(
         coordinator,
         entry,
         "copy_jobs",
-        _item_sensors("copy_jobs", COPY_JOB_SENSORS),
+        _job_sensors("copy_jobs", COPY_JOB_SENSORS),
         async_add_entities,
     )
     maintenance_supported = supports_repository_maintenance(coordinator.sdk)
@@ -624,6 +712,10 @@ class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
 
 class VeeamOrganizationSyncSensor(OrganizationSyncMixin, VeeamItemSensor):
     """A sensor on an organization device showing its cache sync state."""
+
+
+class VeeamJobSessionSensor(JobSessionMixin, VeeamItemSensor):
+    """A sensor on a job or copy job device showing its latest session."""
 
 
 class VeeamRepositoryMaintenanceSensor(RepositoryMaintenanceMixin, VeeamItemSensor):

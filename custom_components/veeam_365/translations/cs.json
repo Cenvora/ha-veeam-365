@@ -217,6 +217,21 @@
       },
       "repository_maintenance_status": {
         "name": "Stav údržby"
+      },
+      "job_last_session": {
+        "name": "Poslední relace"
+      },
+      "job_last_session_duration": {
+        "name": "Doba trvání poslední relace"
+      },
+      "job_last_session_transferred": {
+        "name": "Přeneseno v poslední relaci"
+      },
+      "job_last_session_processed_objects": {
+        "name": "Zpracované objekty poslední relace"
+      },
+      "job_last_session_processing_rate": {
+        "name": "Rychlost zpracování poslední relace"
       }
     },
     "binary_sensor": {

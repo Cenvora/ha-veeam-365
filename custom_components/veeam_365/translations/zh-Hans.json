@@ -217,6 +217,21 @@
       },
       "repository_maintenance_status": {
         "name": "维护状态"
+      },
+      "job_last_session": {
+        "name": "上次会话"
+      },
+      "job_last_session_duration": {
+        "name": "上次会话时长"
+      },
+      "job_last_session_transferred": {
+        "name": "上次会话传输量"
+      },
+      "job_last_session_processed_objects": {
+        "name": "上次会话处理的对象"
+      },
+      "job_last_session_processing_rate": {
+        "name": "上次会话处理速率"
       }
     },
     "binary_sensor": {

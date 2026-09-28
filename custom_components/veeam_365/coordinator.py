@@ -39,6 +39,9 @@ from veeam_365.exceptions import VeeamAuthenticationError, VeeamError, VeeamSess
 
 from .const import (
     DOMAIN,
+    JOB_SESSIONS_LOOKBACK_HOURS,
+    JOB_SESSIONS_OVERLAP_MINUTES,
+    JOB_SESSIONS_PAGE_LIMIT,
     MAX_PAGES,
     PAGE_LIMIT,
     PROTECTED_COUNT_INTERVAL,
@@ -65,6 +68,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "organizations": [],
     "organization_sync": {},
     "repository_maintenance": {},
+    "job_sessions": {},
     "health": None,
 }
 
@@ -98,6 +102,17 @@ MAINTENANCE_SESSIONS_OPERATION = (
 ACTIVE_MAINTENANCE_STATUSES = frozenset(
     {"Initialized", "Preparing", "Running", "Finishing", "Canceling", "Failing"}
 )
+
+
+# Job sessions (v8). Every version lists them, but only v8 says which job a session belongs
+# to and filters by status, which is what makes finding each job's latest session cheap.
+JOB_SESSIONS_OPERATION = "job_session.job_session_get"
+JOB_SESSION_OPERATION = "job_session.job_session_get_by_id"
+RUNNING_SESSION_STATUSES = frozenset({"Running", "Queued"})
+
+
+def supports_job_sessions(sdk: VeeamSdk) -> bool:
+    return sdk.accepts(JOB_SESSIONS_OPERATION, "status")
 
 
 def supports_repository_maintenance(sdk: VeeamSdk) -> bool:
@@ -488,6 +503,48 @@ def parse_sync_state(state: Any) -> dict[str, Any]:
     }
 
 
+def parse_job_session(session: Any, now: Any = None) -> dict[str, Any] | None:
+    session_id = id_field(session)
+    job_id = id_field(session, "job_id")
+    if session_id is None or job_id is None:
+        return None
+    status = text_field(session, "status")
+    config_type = text_field(session, "job_session_config_type")
+    created = field(session, "creation_time")
+    ended = field(session, "end_time")
+    is_running = status in RUNNING_SESSION_STATUSES
+    # A running session's duration so far; a finished one's in full
+    until = ended or (now if is_running else None)
+    duration = (until - created).total_seconds() if created and until else None
+    statistics = field(session, "statistics")
+    return {
+        "session_id": session_id,
+        "job_id": job_id,
+        "status": humanize(status, "Unknown"),
+        "status_raw": status,
+        "is_running": is_running,
+        "type": humanize(config_type) if config_type else None,
+        "creation_time": created,
+        "end_time": ended,
+        "duration_seconds": None if duration is None else max(round(duration), 0),
+        "details": text_field(session, "details"),
+        "retry_count": int_field(session, "retry_count"),
+        "will_retry": bool_field(session, "job_will_be_retried"),
+        "transferred_bytes": int_field(statistics, "transferred_data_bytes"),
+        "processed_objects": int_field(statistics, "processed_objects"),
+        "processing_rate_bytes_per_second": int_field(statistics, "processing_rate_bytes_ps"),
+        "bottleneck": text_field(statistics, "bottleneck"),
+    }
+
+
+def _newer(candidate: dict[str, Any], current: dict[str, Any] | None) -> bool:
+    """Whether a session should replace the one known for its job."""
+    if current is None or candidate["session_id"] == current["session_id"]:
+        return True
+    new, old = candidate.get("creation_time"), current.get("creation_time")
+    return new is not None and (old is None or new > old)
+
+
 def parse_maintenance_session(session: Any) -> dict[str, Any] | None:
     session_id = id_field(session)
     if session_id is None:
@@ -718,10 +775,12 @@ class _VeeamCalls:
             seen,
         )
 
-    async def _fetch_collection(self, operation: str) -> list[Any]:
+    async def _fetch_collection(
+        self, operation: str, page_limit: int = PAGE_LIMIT, **kwargs: Any
+    ) -> list[Any]:
         """Every item of a collection."""
         items: list[Any] = []
-        async for page in self._pages(operation):
+        async for page in self._pages(operation, page_limit=page_limit, **kwargs):
             items.extend(page)
         return items
 
@@ -748,6 +807,10 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.sdk = sdk
         self._license_reason: str | None | bool = False  # False: not evaluated yet
+        # Each job's latest session, kept between polls so that later polls only ask for
+        # what is new, and when that last asking ran successfully
+        self._job_sessions: dict[str, dict[str, Any]] = {}
+        self._job_sessions_since: Any = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -815,6 +878,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             )
         if supports_repository_maintenance(self.sdk):
             fetchers["repository_maintenance"] = self._fetch_repository_maintenance
+        if supports_job_sessions(self.sdk):
+            fetchers["job_sessions"] = self._fetch_job_sessions
         if self.sdk.has_operation(HEALTH_OPERATION):
             fetchers["health"] = self._fetch_health
 
@@ -942,6 +1007,55 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         if organizations and not states:
             raise EndpointError(errors[0])
         return states
+
+    async def _fetch_job_sessions(self) -> dict[str, dict[str, Any]]:
+        """Each job's and copy job's latest session, by job ID.
+
+        Which sessions changed is found without paging through history on every poll:
+        the running ones, plus those since the last poll (the first poll after startup looks
+        back a day). endTimeLowerBound is documented as filtering on creation time; asking
+        for the running sessions separately covers it filtering on the end time instead. A
+        session last seen running that neither list returns has finished between two polls,
+        so it is read by ID for its outcome.
+        """
+        started = dt_util.utcnow()
+        since = self._job_sessions_since or started - timedelta(hours=JOB_SESSIONS_LOOKBACK_HOURS)
+        since -= timedelta(minutes=JOB_SESSIONS_OVERLAP_MINUTES)
+        running_filter = self.sdk.models.JobSessionGetStatus.RUNNING
+
+        seen: dict[str, dict[str, Any]] = {}
+        for kwargs in ({"status": running_filter}, {"end_time_lower_bound": since}):
+            items = await self._fetch_collection(
+                JOB_SESSIONS_OPERATION, page_limit=JOB_SESSIONS_PAGE_LIMIT, **kwargs
+            )
+            for session in parse_items(
+                "job sessions", items, lambda item: parse_job_session(item, started)
+            ):
+                seen[session["session_id"]] = session
+
+        for known in list(self._job_sessions.values()):
+            if not known["is_running"] or known["session_id"] in seen:
+                continue
+            try:
+                session = parse_job_session(
+                    await self._call(JOB_SESSION_OPERATION, job_sessions_id=known["session_id"]),
+                    started,
+                )
+            except (VeeamAuthenticationError, VeeamSessionError):
+                raise
+            except (EndpointError, VeeamError, *PARSE_ERRORS) as err:
+                _LOGGER.debug(
+                    "Could not re-read job session %s: %s", known["session_id"], describe_error(err)
+                )
+                continue
+            if session is not None:
+                seen[session["session_id"]] = session
+
+        for session in sorted(seen.values(), key=lambda s: s["creation_time"] or started):
+            if _newer(session, self._job_sessions.get(session["job_id"])):
+                self._job_sessions[session["job_id"]] = session
+        self._job_sessions_since = started
+        return dict(self._job_sessions)
 
     async def _fetch_repository_maintenance(self) -> dict[str, dict[str, Any]]:
         sessions = parse_items(
