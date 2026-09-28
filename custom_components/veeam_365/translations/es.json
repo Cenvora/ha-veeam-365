@@ -175,6 +175,9 @@
       "server_connected": {
         "name": "Conectado"
       },
+      "service_health": {
+        "name": "Estado de los servicios"
+      },
       "license_auto_update": {
         "name": "Actualización automática habilitada"
       },

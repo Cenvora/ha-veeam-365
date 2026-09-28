@@ -27,6 +27,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .coordinator import HEALTH_OPERATION
 from .entity import VeeamItemEntity, VeeamLicenseEntity, VeeamServerEntity, async_track_items
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,13 +128,15 @@ async def async_setup_entry(
 
     async_track_items(coordinator, entry, "repositories", repository_sensors, add)
 
-    add(
-        [
-            VeeamServerHealthOkSensor(coordinator, entry),
-            VeeamServerConnectedSensor(coordinator, entry),
-            VeeamLicenseAutoUpdateSensor(coordinator, entry),
-        ]
-    )
+    server_sensors: list[BinarySensorEntity] = [
+        VeeamServerHealthOkSensor(coordinator, entry),
+        VeeamServerConnectedSensor(coordinator, entry),
+        VeeamLicenseAutoUpdateSensor(coordinator, entry),
+    ]
+    # The server's health report exists from API v8 only
+    if coordinator.sdk.has_operation(HEALTH_OPERATION):
+        server_sensors.append(VeeamServiceHealthSensor(coordinator, entry))
+    add(server_sensors)
 
 
 # ===========================
@@ -196,6 +199,55 @@ class VeeamServerConnectedSensor(_ServerStatusSensor):
     @property
     def icon(self) -> str:
         return "mdi:lan-connect" if self.is_on else "mdi:lan-disconnect"
+
+
+class VeeamServiceHealthSensor(VeeamServerEntity, BinarySensorEntity):
+    """On (Problem) when the server's own health report says Unhealthy.
+
+    Unlike Health OK, which only says whether this integration's polls got answers, this is
+    the server's verdict on its NATS server and PostgreSQL configuration database. Each check
+    is an attribute, and ``problems`` lists the descriptions of the failing ones for use in a
+    notification.
+    """
+
+    endpoint = "health"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "service_health", "service_health")
+
+    @property
+    def health(self) -> dict[str, Any] | None:
+        return (self.coordinator.data or {}).get("health")
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.health is not None
+
+    @property
+    def is_on(self) -> bool | None:
+        health = self.health
+        healthy = health.get("is_healthy") if health else None
+        return None if healthy is None else not healthy
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        health = self.health or {}
+        checks = health.get("checks") or {}
+        return {
+            "raw_value": health.get("status_raw"),
+            "checks": checks,
+            "problems": [
+                check.get("description") or name
+                for name, check in checks.items()
+                if check.get("status") != "Healthy"
+            ],
+        }
+
+    @property
+    def icon(self) -> str:
+        return "mdi:server-remove" if self.is_on else "mdi:server-network"
 
 
 # ===========================

@@ -175,6 +175,9 @@
       "server_connected": {
         "name": "已连接"
       },
+      "service_health": {
+        "name": "服务运行状况"
+      },
       "license_auto_update": {
         "name": "已启用自动更新"
       },

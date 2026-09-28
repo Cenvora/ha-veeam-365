@@ -71,6 +71,14 @@ async def async_get_config_entry_diagnostics(
             "type": license_info.get("type"),
         }
 
+    # The server's own health report (API v8)
+    if data.get("health"):
+        health = data["health"]
+        diagnostics_data["health"] = {
+            "status": health.get("status_raw"),
+            "checks": health.get("checks", {}),
+        }
+
     # Add job summaries (without sensitive details)
     if data.get("jobs"):
         jobs_summary = {}

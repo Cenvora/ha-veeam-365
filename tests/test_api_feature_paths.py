@@ -1,4 +1,4 @@
-"""The operations the integration calls exist in every API version it offers.
+"""The operations the integration calls exist in the API versions it expects them in.
 
 The buttons used to import model modules (job_start_action and friends) that exist in no
 version of veeam-365; the ImportError was swallowed and every button did nothing. These
@@ -17,11 +17,32 @@ from custom_components.veeam_365.const import API_VERSIONS
 MODULES = sorted(API_VERSIONS.values())
 
 
+def _version_number(api_module: str) -> int:
+    return int(api_module.removeprefix("v"))
+
+
 @pytest.mark.parametrize("api_module", MODULES)
 @pytest.mark.parametrize("operation", sdk.OPERATIONS)
 def test_every_operation_exists(api_module, operation):
-    spec = importlib.util.find_spec(f"veeam_365.{api_module}.api.{operation}")
-    assert spec is not None, f"{api_module} has no {operation}"
+    """Versioned operations exist from their first version on, and not before.
+
+    Absent before it too: an operation that turned out to exist everywhere belongs with the
+    unconditional ones, and its has_operation gate is dead code.
+    """
+    try:
+        spec = importlib.util.find_spec(f"veeam_365.{api_module}.api.{operation}")
+    except ModuleNotFoundError:
+        spec = None  # the whole API module (tag) is missing, not just the operation
+    since = sdk.VERSIONED_OPERATIONS.get(operation)
+    if since is None or _version_number(api_module) >= _version_number(since):
+        assert spec is not None, f"{api_module} has no {operation}"
+    else:
+        assert spec is None, f"{operation} exists before {since}; it needs no version gate"
+
+
+def test_versioned_operations_name_a_real_version():
+    for operation, since in sdk.VERSIONED_OPERATIONS.items():
+        assert since in MODULES, f"{operation} is gated on unknown version {since}"
 
 
 @pytest.mark.parametrize(

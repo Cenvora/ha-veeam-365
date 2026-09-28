@@ -175,6 +175,9 @@
       "server_connected": {
         "name": "Подключено"
       },
+      "service_health": {
+        "name": "Состояние служб"
+      },
       "license_auto_update": {
         "name": "Автообновление включено"
       },
