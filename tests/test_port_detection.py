@@ -13,7 +13,6 @@ import ast
 import asyncio
 import json
 from pathlib import Path
-import sys
 import types
 
 import pytest
@@ -39,26 +38,26 @@ def _namespace():
         "DEFAULT_VERIFY_SSL": True,
         "_LOGGER": types.SimpleNamespace(debug=lambda *a, **k: None),
         "Any": object,
+        "HomeAssistant": object,
+        "get_async_client": lambda hass, verify_ssl=True: ("shared-client", verify_ssl),
     }
 
 
 def load_finder(endpoint=None, raises=None, record=None, ports=(4443,)):
     """Load async_find_working_port with veeam_365.discovery stubbed out."""
 
-    async def detect_rest_api(host, *, ports=None, versions=None, verify_ssl=True, **kwargs):
+    async def detect_rest_api(host, *, ports=None, versions=None, verify_ssl=True, client=None):
         if record is not None:
-            record.update(host=host, ports=ports, versions=versions, verify_ssl=verify_ssl)
+            record.update(
+                host=host, ports=ports, versions=versions, verify_ssl=verify_ssl, client=client
+            )
         if raises is not None:
             raise raises
         return endpoint
 
-    discovery = types.ModuleType("veeam_365.discovery")
-    discovery.detect_rest_api = detect_rest_api
-    discovery.DEFAULT_PORTS = ports
-    sys.modules.setdefault("veeam_365", types.ModuleType("veeam_365"))
-    sys.modules["veeam_365.discovery"] = discovery
-
     namespace = _namespace()
+    namespace["detect_rest_api"] = detect_rest_api
+    namespace["DEFAULT_PORTS"] = ports
     exec(
         compile(
             ast.Module(body=[_extract("async_find_working_port")], type_ignores=[]),
@@ -67,7 +66,12 @@ def load_finder(endpoint=None, raises=None, record=None, ports=(4443,)):
         ),
         namespace,
     )
-    return namespace["async_find_working_port"]
+    finder = namespace["async_find_working_port"]
+
+    async def call(data, configured_port):
+        return await finder(None, data, configured_port)
+
+    return call
 
 
 class Endpoint:
@@ -116,6 +120,7 @@ def test_verify_ssl_is_passed_through():
     asyncio.run(finder(data(verify_ssl=False), 443))
 
     assert record["verify_ssl"] is False
+    assert record["client"] == ("shared-client", False)
 
 
 def test_no_answer_gives_no_advice():
@@ -123,28 +128,6 @@ def test_no_answer_gives_no_advice():
     finder = load_finder(endpoint=None)
 
     assert asyncio.run(finder(data(), 443)) is None
-
-
-def test_an_older_library_degrades_to_the_generic_error():
-    """An ImportError escaping here would surface as "unknown" instead of the real error.
-
-    A hand-installed older veeam-365 has no detect_rest_api, and the probe runs inside the
-    connection-failure handler.
-    """
-    sys.modules.setdefault("veeam_365", types.ModuleType("veeam_365"))
-    sys.modules["veeam_365.discovery"] = types.ModuleType("veeam_365.discovery")
-
-    namespace = _namespace()
-    exec(
-        compile(
-            ast.Module(body=[_extract("async_find_working_port")], type_ignores=[]),
-            str(CONFIG_FLOW_PATH),
-            "exec",
-        ),
-        namespace,
-    )
-
-    assert asyncio.run(namespace["async_find_working_port"](data(), 443)) is None
 
 
 def test_a_failing_probe_is_not_fatal():
@@ -160,33 +143,22 @@ def test_a_failing_probe_is_not_fatal():
 
 
 def test_wrong_port_is_caught_before_connection_error():
-    """WrongPortError subclasses ConnectionError, so ordering decides which wins."""
+    """WrongPortError subclasses CannotConnect, so ordering decides which wins."""
     content = CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
-    assert "class WrongPortError(ConnectionError)" in content
+    assert "class WrongPortError(CannotConnect)" in content
 
-    # Every handler pair must test the subclass first, or the advice is never shown
+    # One shared handler turns exceptions into form errors, and all four flows use it
+    assert content.count('errors["base"] = "wrong_port"') == 1
     assert (
-        content.count('errors["base"] = "wrong_port"') == 4
+        content.count("await _async_validate(self.hass") == 4
     ), "all four flows (user, reconfigure, reauth, options) should surface it"
 
-    # Only the flow steps matter: they are the handlers that turn an exception into a
-    # message. validate_input also catches ConnectionError, but to re-raise, not to report.
-    lines = [line.strip() for line in content.splitlines()]
-    reporting = [
-        index
-        for index, line in enumerate(lines)
-        if line.startswith("except ConnectionError")
-        and "cannot_connect" in "".join(lines[index + 1 : index + 3])
-    ]
-    assert len(reporting) == 4, "all four flows (user, reconfigure, reauth, options) report it"
-
-    for index in reporting:
-        preceding = lines[max(0, index - 4) : index]
-        assert any(line.startswith("except WrongPortError") for line in preceding), (
-            "ConnectionError is caught before WrongPortError, which would swallow the port "
-            "advice"
-        )
+    handler = content[content.index("async def _async_validate") :]
+    handler = handler[: handler.index("\nclass ")]
+    assert handler.index("except WrongPortError") < handler.index(
+        "except CannotConnect"
+    ), "CannotConnect is caught before WrongPortError, which would swallow the port advice"
 
 
 def test_every_form_supplies_the_placeholder():
@@ -201,8 +173,8 @@ def test_authentication_failures_do_not_trigger_a_port_probe():
     content = CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
     validate = content[content.index("async def validate_input") :]
-    handler = validate[validate.index("except PermissionError") :]
-    handler = handler[: handler.index("except ConnectionError")]
+    handler = validate[validate.index("except VeeamAuthenticationError") :]
+    handler = handler[: handler.index("except (TimeoutError")]
 
     assert "_raise_wrong_port_if_answering" not in handler
 

@@ -10,7 +10,7 @@ Running/Not running, with no per-entity strings to maintain.
 """
 
 from pathlib import Path
-import re
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -43,41 +43,66 @@ def test_no_binary_entities_are_left_on_the_sensor_platform():
 
 def test_every_binary_sensor_moved():
     """Server health and connectivity, license auto-update, and the four repository ones."""
-    source = binary_source()
-    concrete = re.findall(r"^class (Veeam\w+)\(.*Base\):", source, re.M)
+    from custom_components.veeam_365 import binary_sensor
 
-    assert len(concrete) >= 7, f"only found {concrete}"
+    keys = {description.key for description in binary_sensor.REPOSITORY_BINARY_SENSORS}
+    assert keys == {"online", "out_of_date", "immutable", "accessible"}
+    for name in (
+        "VeeamServerHealthOkSensor",
+        "VeeamServerConnectedSensor",
+        "VeeamLicenseAutoUpdateSensor",
+    ):
+        assert hasattr(binary_sensor, name)
+
+
+@pytest.mark.parametrize(
+    "key,device_class",
+    [
+        ("online", None),
+        ("out_of_date", "problem"),
+        ("immutable", None),
+        ("accessible", "connectivity"),
+    ],
+)
+def test_repository_device_classes(key, device_class):
+    """The device class is what turns on/off into readable text.
+
+    "online" never measured connectivity — it reports whether an object storage cache is
+    in sync — so it lost the CONNECTIVITY class along with its misleading name.
+    Immutability being off is a configuration choice, so PROBLEM would wrongly show red.
+    """
+    from custom_components.veeam_365 import binary_sensor
+
+    (description,) = [d for d in binary_sensor.REPOSITORY_BINARY_SENSORS if d.key == key]
+    assert (description.device_class or None) == device_class
 
 
 @pytest.mark.parametrize(
     "entity,device_class",
     [
-        ("VeeamServerHealthOkSensor", "RUNNING"),
-        ("VeeamServerConnectedSensor", "CONNECTIVITY"),
-        ("VeeamLicenseAutoUpdateSensor", "UPDATE"),
-        ("VeeamRepositoryOnlineStatusSensor", "CONNECTIVITY"),
-        ("VeeamRepositoryOutOfDateSensor", "PROBLEM"),
-        ("VeeamRepositoryAccessibleSensor", "CONNECTIVITY"),
+        ("VeeamServerHealthOkSensor", "running"),
+        ("VeeamServerConnectedSensor", "connectivity"),
+        ("VeeamLicenseAutoUpdateSensor", "update"),
     ],
 )
-def test_device_classes_supply_the_wording(entity, device_class):
-    """The device class is what turns on/off into readable text, so each one needs the right
-    class rather than a hand-written label."""
-    source = binary_source()
-    block = source[source.index(f"class {entity}(") :]
-    block = block[: block.index("\n\nclass ")] if "\n\nclass " in block else block
-
-    assert f"BinarySensorDeviceClass.{device_class}" in block
+def test_server_and_license_device_classes(entity, device_class):
+    assert _instance(entity).device_class == device_class
 
 
-def test_immutable_has_no_device_class_and_says_why():
-    """Immutability being off is a configuration choice, so PROBLEM would wrongly show red."""
-    source = binary_source()
-    block = source[source.index("class VeeamRepositoryImmutableSensor") :]
-    block = block[: block.index("\n\nclass ")]
+def test_connectivity_sensors_can_report_off():
+    """Unavailable is what these report *about*; they must be able to say off instead."""
+    for entity in ("VeeamServerHealthOkSensor", "VeeamServerConnectedSensor"):
+        sensor = _instance(entity)
+        sensor.coordinator.last_update_success = False
+        assert sensor.available is True
+        assert sensor.is_on is False
 
-    assert "BinarySensorDeviceClass" not in block
-    assert "def icon" in block
+
+def _instance(name):
+    from custom_components.veeam_365 import binary_sensor
+
+    entry = MagicMock(entry_id="entry-1", data={"host": "veeam.example.com"})
+    return getattr(binary_sensor, name)(MagicMock(), entry)
 
 
 def test_old_sensor_entities_are_cleaned_up_on_upgrade():
@@ -87,7 +112,7 @@ def test_old_sensor_entities_are_cleaned_up_on_upgrade():
 
     assert "_drop_superseded_sensor_entities" in source
     block = source[source.index("def _drop_superseded_sensor_entities") :]
-    block = block[: block.index("async def async_setup_entry")]
+    block = block[: block.index("@dataclass")]
 
     assert 'existing.domain != "sensor"' in block, "only sensor-domain strays should be removed"
     assert "existing.unique_id not in unique_ids" in block, "matching should be by unique ID"
@@ -105,27 +130,17 @@ def test_the_blueprints_can_now_find_these_entities():
     assert filters >= 1, "the repository blueprint depends on this domain"
 
 
-def test_mixins_are_reused_rather_than_duplicated():
-    """Device grouping has to match the sensor platform exactly, or a repository shows up
-    twice."""
-    source = binary_source()
-
-    assert "from .sensor import" in source
-    for mixin in ("VeeamLicenseMixin", "VeeamRepositoryMixin"):
-        assert mixin in source
-
-
 def test_unique_ids_are_unchanged_by_the_move():
     """Changing them would strand every entity's history and customisations."""
     source = binary_source()
 
     for suffix in (
-        "_server_health_ok",
-        "_server_connected",
-        "_license_auto_update",
-        "_online",
-        "_out_of_date",
-        "_immutable",
-        "_accessible",
+        '"server_health_ok"',
+        '"server_connected"',
+        '"license_auto_update"',
+        'key="online"',
+        'key="out_of_date"',
+        'key="immutable"',
+        'key="accessible"',
     ):
         assert suffix in source, f"{suffix} unique ID suffix should be preserved"

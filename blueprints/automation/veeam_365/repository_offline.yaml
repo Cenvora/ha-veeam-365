@@ -4,18 +4,21 @@ blueprint:
     Notify when a Veeam Backup for Microsoft 365 backup repository stops being reachable, and
     again when it recovers.
 
-    A repository that is out of sync or out of order does not fail every job immediately, so
-    this often goes unnoticed until a restore is needed. Pick the **Online** sensors of the
-    repositories to watch, and optionally their **Accessible** sensors too.
+    A repository in the Invalid state does not fail every job immediately, so this often goes
+    unnoticed until a restore is needed. Pick the **Accessible** sensors of the repositories
+    to watch, and optionally their **Cache In Sync** sensors too (object storage
+    repositories whose local cache needs synchronizing).
   domain: automation
   source_url: https://github.com/Cenvora/ha-veeam-365/blob/main/blueprints/automation/veeam_365/repository_offline.yaml
   author: Cenvora
   input:
     repository_sensors:
-      name: Repository Online sensors
+      name: Repository Accessible sensors
       description: >-
-        One or more Veeam repository "Online" sensors. "Accessible" sensors work here too —
-        both report a repository the server cannot currently use.
+        One or more Veeam repository "Accessible" sensors, which turn off when the server
+        reports the repository as Invalid (API v8). "Cache In Sync" sensors work here too:
+        they turn off when an object storage repository's cache is out of sync. On
+        installations that predate the rename, their entity IDs still end in "_online".
       selector:
         entity:
           multiple: true
@@ -67,7 +70,7 @@ variables:
   repository_name: >-
     {{ device_attr(trigger.entity_id, 'name_by_user')
        or device_attr(trigger.entity_id, 'name')
-       or trigger.to_state.name | replace(' Online', '') | replace(' Accessible', '') }}
+       or trigger.to_state.name | replace(' Accessible', '') | replace(' Cache In Sync', '') }}
   title: >-
     {{ 'Veeam 365 repository offline: ' ~ repository_name
        if trigger.id == 'offline'

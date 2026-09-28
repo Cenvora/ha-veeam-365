@@ -90,6 +90,38 @@ If the connection fails, the configured port is checked against the port the RES
 answers on, and the error says so instead of a bare "cannot connect" — the service listens on
 4443 out of the box, but the port is configurable in the console.
 
+## Devices and entity IDs
+
+Every device this integration creates is named with a **VB365** prefix, and the kind of
+object it is:
+
+| Device | Name |
+| --- | --- |
+| Server | `VB365 Server <host>` |
+| License | `VB365 License <host>` |
+| Backup job | `VB365 Job <job name>` |
+| Backup copy job | `VB365 Copy Job <copy job name>` |
+| Repository | `VB365 Repository <repository name>` |
+
+The kind is left out when the name already says it, so a job called "Daily Mail Job" is
+`VB365 Daily Mail Job`, not `VB365 Job Daily Mail Job`.
+
+Entity IDs are built from the device name plus the entity name, so a new installation gets
+IDs such as `sensor.vb365_job_daily_mail_last_status`, `sensor.vb365_license_status` and
+`binary_sensor.vb365_server_veeam_example_com_connected`. The prefix keeps them apart from
+the Veeam Backup & Replication integration, whose devices would otherwise also be called
+"License" and "Server" — one of the two then ended up with IDs like
+`sensor.veeam_license_status_2`.
+
+> [!NOTE]
+> Upgrading renames the devices, but **existing entity IDs are left alone**: Home Assistant
+> keeps the IDs it already registered, so automations and dashboards keep working. To move
+> an existing installation onto the new IDs, open **Settings → Devices & services →
+> Entities**, select the Veeam entities and choose **Recreate entity IDs** from the
+> selection menu where your Home Assistant version offers it — or open each device, rename
+> it (keeping the new name is fine) and accept the offer to rename its entity IDs. Update
+> anything that referred to the old IDs afterwards.
+
 ## Sensor values
 
 Veeam reports enum values as identifiers: `EntireOrganization`, `NotConfigured`,
@@ -100,15 +132,30 @@ Every prettified sensor also exposes the untouched API value as a `raw_value` at
 automations and templates that need to match exactly have something stable to match on:
 
 ```jinja
-{{ state_attr('sensor.nightly_backup_last_status', 'raw_value') == 'NotConfigured' }}
+{{ state_attr('sensor.vb365_job_nightly_backup_last_status', 'raw_value') == 'NotConfigured' }}
 ```
+
+A value the server does not report — the last backup time on API v6, say, or a field that
+comes back empty — reads as **unknown**, never as a placeholder string. A status newer than
+the `veeam-365` library knows about is shown as the server sent it rather than dropping the
+whole job.
 
 ## Binary sensors
 
-On/off states — server **Connected** and **Health OK**, repository **Online**, **Out of Date**,
-**Immutable** and **Accessible**, and license **Auto Update Enabled** — are `binary_sensor`
-entities, so Home Assistant renders them as Connected/Disconnected and OK/Problem rather than
-`on`/`off`.
+On/off states are `binary_sensor` entities, so Home Assistant renders them as
+Connected/Disconnected and OK/Problem rather than `on`/`off`:
+
+- Server **Connected** — off while polls fail. It stays available, so it can actually say
+  "Disconnected" instead of going unavailable exactly when it matters.
+- Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
+  repositories, license, server info) answers with an error; the `failed_endpoints`
+  attribute says which.
+- Repository **Accessible** — off when the server reports the repository as Invalid (API
+  v8; unknown on older versions).
+- Repository **Cache In Sync** — off when an object storage repository's local cache needs
+  synchronizing. It used to be called **Online**, which it never measured; existing
+  installations keep its `_online` entity ID.
+- Repository **Out of Date** (API v8) and **Immutable**, and license **Auto Update Enabled**.
 
 > [!IMPORTANT]
 > These entities previously lived in the `sensor` domain. Upgrading moves them: `sensor.*`
@@ -116,31 +163,46 @@ entities, so Home Assistant renders them as Connected/Disconnected and OK/Proble
 > unchanged), and the old entity is removed rather than left behind as unavailable. Any
 > automation, template or dashboard referring to the old `sensor.` entity IDs needs updating.
 
+## When the server misbehaves
+
+- **Unreachable or timing out** at startup: setup is retried automatically. During
+  polling, entities go unavailable and **Connected** turns off until the server answers.
+- **Credentials refused**: Home Assistant asks you to re-authenticate (Settings → Devices &
+  services shows a **Reconfigure** prompt).
+- **One endpoint failing** — the license endpoint refusing a restricted account, for
+  instance: only that endpoint's entities go unavailable, and **Health OK** turns off. If
+  the jobs endpoint fails, the whole update fails.
+- **Buttons** report failure: when the server rejects Start, Stop, Enable, Disable or
+  Synchronize, Home Assistant shows the server's error rather than pretending it worked.
+
 ## Removing devices
 
 A job or repository deleted in Veeam disappears from Home Assistant on the next poll. If the
 server stops reporting an object while other objects of the same kind are still reported, its
 device is removed automatically.
 
-When nothing of that kind is reported at all — which is what a failed fetch looks like too —
-nothing is pruned, and the device gets a **Delete** button instead. Deleting a device the
-server still reports is refused, because the next poll would simply recreate it.
+When nothing of that kind is reported at all, or the fetch failed, nothing is pruned — both
+would otherwise look like everything being deleted — and the device gets a **Delete** button
+instead. Deleting a device the server still reports is refused, because the next poll would
+simply recreate it.
 
 ## Entities
 
-The integration creates sensor entities for each backup job:
+Per **backup job**: Last Status, Last Run, Next Run, Last Backup (API v7 and later), Backup
+Type, Enabled and Name sensors, plus Start, Stop, Enable and Disable buttons.
 
-### Sensor Entity
+Per **backup copy job**: Last Status, Last Run, Last Backup, Enabled and Name sensors, plus
+Start, Stop, Enable and Disable buttons.
 
-- **Entity ID**: `sensor.veeam_<job_name>`
-- **State**: Current job status (`success`, `running`, `failed`, `warning`, `unknown`)
-- **Attributes**:
-  - `job_id`: Unique job identifier
-  - `job_name`: Display name of the job
-  - `job_type`: Type of backup job
-  - `last_run`: Timestamp of the last job execution
-  - `next_run`: Timestamp of the next scheduled run
-  - `last_result`: Result of the last job execution
+Per **repository**: Type, Description, Used Space (GiB; local repositories report capacity
+minus free space, object storage repositories their used space) and, when immutability is
+on, Immutability Days sensors; the binary sensors above; and a Synchronize Cache button.
+
+On the **server**: Product Version, Installation ID and Last Successful Poll sensors, and the
+Connected and Health OK binary sensors.
+
+On the **license**: Status, Type, Expiration Date, Grace Period Expiration, Licensed To,
+Total/Used/New Licenses sensors, and the Auto Update Enabled binary sensor.
 
 ## Automation Blueprints
 
@@ -175,7 +237,8 @@ One digest a day: how many jobs succeeded, warned or failed, and which need atte
 
 ### Repository offline
 
-Fires when a backup repository stops being reachable, with an optional recovery notification.
+Fires when a backup repository stops being accessible (or its cache falls out of sync), with an
+optional recovery notification.
 
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FCenvora%2Fha-veeam-365%2Fmain%2Fblueprints%2Fautomation%2Fveeam_365%2Frepository_offline.yaml)
 

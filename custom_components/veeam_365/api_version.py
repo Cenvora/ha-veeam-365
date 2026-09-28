@@ -15,6 +15,9 @@ import logging
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.httpx_client import get_async_client
+from veeam_365.discovery import detect_api_version
 
 from .const import (
     API_VERSIONS,
@@ -30,19 +33,20 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_resolve_api_version(data: dict[str, Any]) -> str:
+async def async_resolve_api_version(hass: HomeAssistant, data: dict[str, Any]) -> str:
     """Resolve the configured API version, detecting it when set to auto.
 
     Detection probes the server's versioned paths (see veeam_365.discovery) and needs no
     credentials, so it runs before the connection is validated. It is best-effort: a server
     behind a proxy that rewrites statuses reports nothing useful, and the static default is
     used instead of failing setup.
+
+    Probes go through Home Assistant's shared httpx client rather than one the library
+    would create, which loads certificates from disk inside the event loop.
     """
     api_version = data.get(CONF_API_VERSION, AUTO_API_VERSION)
     if api_version != AUTO_API_VERSION:
         return api_version
-
-    from veeam_365.discovery import detect_api_version
 
     host = data[CONF_HOST]
     base_url = f"https://{host}:{data.get(CONF_PORT, DEFAULT_PORT)}"
@@ -52,12 +56,13 @@ async def async_resolve_api_version(data: dict[str, Any]) -> str:
         detected = await detect_api_version(
             base_url,
             verify_ssl=verify_ssl,
+            client=get_async_client(hass, verify_ssl=verify_ssl),
             # The library is keyed by module name ("v8"), the config entry by display
             # version ("8"), so the candidate list has to be translated both ways
             versions=list(API_VERSIONS.values()),
         )
     except Exception as err:  # noqa: BLE001 - detection must never fail the flow
-        _LOGGER.debug("API version detection failed: %s", err)
+        _LOGGER.debug("API version detection failed: %r", err)
         detected = None
 
     display = display_version_for_module(detected) if detected else None

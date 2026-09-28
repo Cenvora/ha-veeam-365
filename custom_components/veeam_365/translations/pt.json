@@ -13,17 +13,17 @@
           "api_version": "Versão da API"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 9419)",
-          "username": "Username with administrator privileges",
-          "password": "Password for the specified user account",
-          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
-          "api_version": "Veeam REST API version to use"
+          "host": "Nome do host ou endereço IP do servidor Veeam Backup for Microsoft 365",
+          "port": "Porta da REST API (padrão: 4443)",
+          "username": "Nome de usuário com privilégios de administrador",
+          "password": "Senha da conta de usuário especificada",
+          "verify_ssl": "Ativar a verificação do certificado SSL (desative apenas para certificados autoassinados)",
+          "api_version": "Deixe em 'auto' para detectar a versão de API mais recente oferecida por este servidor, ou escolha uma versão para fixá-la."
         }
       },
       "reconfigure": {
         "title": "Reconfigurar Veeam Backup for Microsoft 365",
-        "description": "Atualize a configuração do seu servidor Veeam Backup for Microsoft 365.",
+        "description": "Atualize os dados de conexão de {host}.",
         "data": {
           "host": "Host",
           "port": "Porta",
@@ -32,38 +32,36 @@
           "verify_ssl": "Verificar certificado SSL"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port",
-          "username": "Administrator username",
-          "password": "User password",
-          "verify_ssl": "Verify SSL certificates"
+          "host": "Nome do host ou endereço IP do servidor Veeam Backup for Microsoft 365",
+          "port": "Porta da REST API (padrão: 4443)",
+          "username": "Nome de usuário do administrador",
+          "password": "Senha do usuário",
+          "verify_ssl": "Verificar certificados SSL"
         }
       },
       "reauth_confirm": {
         "title": "Reautenticar Veeam Backup for Microsoft 365",
-        "description": "As credenciais do seu servidor Veeam precisam ser atualizadas.",
+        "description": "As credenciais de autenticação de {host} não são mais válidas. Insira novas credenciais.",
         "data": {
           "username": "Nome de usuário",
           "password": "Senha"
         },
         "data_description": {
-          "username": "Administrator username",
-          "password": "User password"
+          "username": "Nome de usuário do administrador",
+          "password": "Senha do usuário"
         }
       }
     },
     "error": {
       "cannot_connect": "Falha ao conectar ao servidor Veeam",
       "invalid_auth": "Credenciais de autenticação inválidas",
-      "unknown": "Ocorreu um erro inesperado"
+      "unknown": "Ocorreu um erro inesperado",
+      "wrong_port": "Não foi possível conectar nessa porta, mas a REST API do Veeam respondeu na porta {wrong_port}. O Veeam Backup for Microsoft 365 disponibiliza a REST API na porta 4443 por padrão; verifique a porta configurada no console."
     },
     "abort": {
       "already_configured": "Este servidor Veeam já está configurado",
       "reauth_successful": "Reautenticação bem-sucedida",
-      "reconfigure_successful": "Reconfiguração bem-sucedida",
-      "cannot_connect": "Falha ao conectar ao servidor Veeam",
-      "invalid_auth": "Credenciais de autenticação inválidas",
-      "unknown": "Ocorreu um erro inesperado"
+      "reconfigure_successful": "Reconfiguração bem-sucedida"
     }
   },
   "options": {
@@ -75,197 +73,193 @@
           "api_version": "Versão da API"
         },
         "data_description": {
-          "api_version": "Select the Veeam REST API version to use for this integration"
+          "api_version": "Selecione 'auto' para detectar novamente a versão de API mais recente oferecida por este servidor."
         }
       }
     },
     "error": {
       "cannot_connect": "Falha ao conectar ao servidor Veeam Backup for Microsoft 365",
       "invalid_auth": "Credenciais de autenticação inválidas",
-      "unknown": "Ocorreu um erro inesperado"
+      "unknown": "Ocorreu um erro inesperado",
+      "wrong_port": "Não foi possível conectar nessa porta, mas a REST API do Veeam respondeu na porta {wrong_port}. O Veeam Backup for Microsoft 365 disponibiliza a REST API na porta 4443 por padrão; verifique a porta configurada no console."
     }
   },
   "entity": {
     "sensor": {
       "job_name": {
-        "name": "Name"
+        "name": "Nome"
       },
       "job_backup_type": {
-        "name": "Backup Type"
+        "name": "Tipo de backup"
       },
       "job_last_run": {
-        "name": "Last Run"
+        "name": "Última execução"
       },
       "job_next_run": {
-        "name": "Next Run"
+        "name": "Próxima execução"
       },
       "job_last_backup": {
-        "name": "Last Backup"
+        "name": "Último backup"
       },
       "job_is_enabled": {
-        "name": "Enabled"
+        "name": "Ativado"
       },
       "job_last_status": {
-        "name": "Last Status"
+        "name": "Último status"
       },
       "copy_job_name": {
-        "name": "Name"
+        "name": "Nome"
       },
       "copy_job_last_run": {
-        "name": "Last Run"
+        "name": "Última execução"
       },
       "copy_job_last_backup": {
-        "name": "Last Backup"
+        "name": "Último backup"
       },
       "copy_job_is_enabled": {
-        "name": "Enabled"
+        "name": "Ativado"
       },
       "copy_job_last_status": {
-        "name": "Last Status"
+        "name": "Último status"
       },
       "server_version": {
-        "name": "Product Version"
+        "name": "Versão do produto"
       },
       "server_installation_id": {
-        "name": "Installation ID"
+        "name": "ID da instalação"
       },
       "server_last_successful_poll": {
-        "name": "Last Successful Poll"
+        "name": "Última consulta bem-sucedida"
       },
       "license_status": {
         "name": "Status"
       },
       "license_type": {
-        "name": "Type"
+        "name": "Tipo"
       },
       "license_expiration": {
-        "name": "Expiration Date"
+        "name": "Data de expiração"
       },
       "license_grace_period_expires": {
-        "name": "Grace Period Expiration"
+        "name": "Fim do período de carência"
       },
       "license_licensed_to": {
-        "name": "Licensed To"
+        "name": "Licenciado para"
       },
       "license_total_number": {
-        "name": "Total Licenses"
+        "name": "Total de licenças"
       },
       "license_used_number": {
-        "name": "Used Licenses"
+        "name": "Licenças usadas"
       },
       "license_new_number": {
-        "name": "New Licenses"
-      },
-      "license_auto_update": {
-        "name": "Auto Update Enabled"
+        "name": "Novas licenças"
       },
       "repository_type": {
-        "name": "Type"
+        "name": "Tipo"
       },
       "repository_description": {
-        "name": "Description"
+        "name": "Descrição"
       },
       "repository_used_space": {
-        "name": "Used Space"
+        "name": "Espaço usado"
       },
       "repository_immutability_days": {
-        "name": "Immutability Days"
+        "name": "Dias de imutabilidade"
       }
     },
     "binary_sensor": {
       "server_health_ok": {
-        "name": "Health OK"
+        "name": "Integridade OK"
       },
       "server_connected": {
-        "name": "Connected"
+        "name": "Conectado"
       },
-      "repository_online": {
-        "name": "Online"
+      "license_auto_update": {
+        "name": "Atualização automática ativada"
+      },
+      "repository_cache_in_sync": {
+        "name": "Cache sincronizado"
       },
       "repository_out_of_date": {
-        "name": "Out of Date"
+        "name": "Desatualizado"
       },
       "repository_immutable": {
-        "name": "Immutable"
+        "name": "Imutável"
       },
       "repository_accessible": {
-        "name": "Accessible"
+        "name": "Acessível"
       }
     },
     "button": {
       "repository_rescan": {
-        "name": "Synchronize Cache"
+        "name": "Sincronizar cache"
       },
       "job_start": {
-        "name": "Start"
+        "name": "Iniciar"
       },
       "job_stop": {
-        "name": "Stop"
+        "name": "Parar"
       },
       "job_enable": {
-        "name": "Enable"
+        "name": "Ativar"
       },
       "job_disable": {
-        "name": "Disable"
+        "name": "Desativar"
+      },
+      "copy_job_start": {
+        "name": "Iniciar"
+      },
+      "copy_job_stop": {
+        "name": "Parar"
+      },
+      "copy_job_enable": {
+        "name": "Ativar"
+      },
+      "copy_job_disable": {
+        "name": "Desativar"
       }
     }
   },
   "exceptions": {
     "connection_error": {
-      "message": "Failed to connect to Veeam server at {host}:{port}"
+      "message": "Falha ao conectar ao servidor Veeam em {host}:{port}: {error}"
     },
     "authentication_failed": {
-      "message": "Authentication failed for user {username}"
-    },
-    "api_error": {
-      "message": "Veeam API error: {error}"
+      "message": "O servidor Veeam recusou as credenciais do usuário {username}"
     },
     "repository_rescan_failed": {
-      "message": "Failed to rescan repository {repository_name}: {error}"
+      "message": "Falha ao sincronizar o repositório {repository_name}: {error}"
     },
     "job_start_failed": {
-      "message": "Failed to start job {job_name}: {error}"
+      "message": "Falha ao iniciar o job {job_name}: {error}"
     },
     "job_stop_failed": {
-      "message": "Failed to stop job {job_name}: {error}"
+      "message": "Falha ao parar o job {job_name}: {error}"
     },
     "job_enable_failed": {
-      "message": "Failed to enable job {job_name}: {error}"
+      "message": "Falha ao ativar o job {job_name}: {error}"
     },
     "job_disable_failed": {
-      "message": "Failed to disable job {job_name}: {error}"
+      "message": "Falha ao desativar o job {job_name}: {error}"
     },
-    "timeout_error": {
-      "message": "Request to Veeam server timed out"
+    "copy_job_start_failed": {
+      "message": "Falha ao iniciar o job de cópia {job_name}: {error}"
     },
-    "invalid_response": {
-      "message": "Received invalid response from Veeam server"
+    "copy_job_stop_failed": {
+      "message": "Falha ao parar o job de cópia {job_name}: {error}"
+    },
+    "copy_job_enable_failed": {
+      "message": "Falha ao ativar o job de cópia {job_name}: {error}"
+    },
+    "copy_job_disable_failed": {
+      "message": "Falha ao desativar o job de cópia {job_name}: {error}"
     }
   },
-  "selector": {
-    "job_status": {
-      "options": {
-        "success": "Success",
-        "running": "Running",
-        "failed": "Failed",
-        "warning": "Warning",
-        "unknown": "Unknown"
-      }
-    },
-    "job_last_result": {
-      "options": {
-        "success": "Success",
-        "failed": "Failed",
-        "warning": "Warning",
-        "none": "None"
-      }
-    },
-    "license_status": {
-      "options": {
-        "valid": "Valid",
-        "expired": "Expired",
-        "invalid": "Invalid"
-      }
+  "issues": {
+    "unsupported_license": {
+      "title": "Licença do Veeam não suportada em {host}",
+      "description": "O servidor Veeam Backup for Microsoft 365 em **{host}** informa a licença **{license}**.\n\nA Community Edition, e servidores cuja licença não pode ser lida, não são suportados por esta integração: os direitos de uso são diferentes e alguns endpoints da REST API respondem de forma diferente ou não respondem, então entidades podem estar ausentes ou não ser confiáveis.\n\nA integração continua funcionando — nada é bloqueado. Se tiver problemas, inclua este tipo de licença no seu relatório de bug. Instale uma licença suportada, ou remova a integração, para limpar este aviso."
     }
   }
 }

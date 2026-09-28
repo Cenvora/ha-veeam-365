@@ -7,10 +7,15 @@ import logging
 from typing import Any
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, selector
+from homeassistant.helpers.httpx_client import get_async_client
+import httpx
+from veeam_365.discovery import DEFAULT_PORTS, detect_rest_api
+from veeam_365.exceptions import VeeamAuthenticationError, VeeamError
 import voluptuous as vol
 
 from .api_version import async_resolve_api_version
@@ -19,17 +24,31 @@ from .const import (
     AUTO_API_VERSION,
     CONF_API_VERSION,
     CONF_VERIFY_SSL,
+    CONNECT_TIMEOUT,
     DEFAULT_API_MODULE,
     DEFAULT_API_VERSION,
     DEFAULT_PORT,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
 )
+from .coordinator import describe_error
+from .sdk import create_client, load_sdk
 
 _LOGGER = logging.getLogger(__name__)
 
+# How long to let the server process the validation session's logout before setup logs in
+LOGOUT_SETTLE_SECONDS = 1.0
 
-class WrongPortError(ConnectionError):
+
+class CannotConnect(HomeAssistantError):
+    """The server could not be reached, or did not answer usefully."""
+
+
+class InvalidAuth(HomeAssistantError):
+    """The server refused the credentials."""
+
+
+class WrongPortError(CannotConnect):
     """The configured port did not answer, but another REST API port did.
 
     Carries the port that answered so the form can name it.
@@ -56,40 +75,40 @@ def _get_api_version_selector_config(
     return api_version_options, AUTO_API_VERSION
 
 
-async def async_find_working_port(data: dict[str, Any], configured_port: int) -> int | None:
+async def async_find_working_port(
+    hass: HomeAssistant, data: dict[str, Any], configured_port: int
+) -> int | None:
     """Return another port the REST API answers on, or None.
 
     The REST API service listens on 4443 by default but the port is configurable, so "cannot
     connect" is quite often the wrong port rather than a wrong host or a firewall. Worth one
     extra probe to be able to say which.
     """
+    others = [port for port in DEFAULT_PORTS if port != configured_port]
+    if not others:
+        return None
+
+    verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     try:
-        # Guarded with the probe itself: this runs inside validate_input's failure handler,
-        # so an ImportError escaping here would replace the real connection error with
-        # "unknown". A hand-installed older veeam-365 should degrade to the generic error,
-        # not a misleading one.
-        from veeam_365.discovery import DEFAULT_PORTS, detect_rest_api
-
-        others = [port for port in DEFAULT_PORTS if port != configured_port]
-        if not others:
-            return None
-
         endpoint = await detect_rest_api(
             data[CONF_HOST],
             ports=others,
             versions=list(API_VERSIONS.values()),
-            verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            verify_ssl=verify_ssl,
+            client=get_async_client(hass, verify_ssl=verify_ssl),
         )
     except Exception as err:  # noqa: BLE001 - a failed probe just means no advice to give
-        _LOGGER.debug("Port probe failed: %s", err)
+        _LOGGER.debug("Port probe failed: %r", err)
         return None
 
     return endpoint.port if endpoint else None
 
 
-async def _raise_wrong_port_if_answering(data: dict[str, Any], err: Exception) -> None:
+async def _raise_wrong_port_if_answering(
+    hass: HomeAssistant, data: dict[str, Any], err: Exception
+) -> None:
     """Turn a connection failure into WrongPortError when another port answers."""
-    working_port = await async_find_working_port(data, data[CONF_PORT])
+    working_port = await async_find_working_port(hass, data, data[CONF_PORT])
     if working_port is None:
         return
 
@@ -102,126 +121,87 @@ async def _raise_wrong_port_if_answering(data: dict[str, Any], err: Exception) -
     raise WrongPortError(working_port) from err
 
 
+async def _logout(client: Any, sdk: Any) -> None:
+    """Revoke the validation session, so setup does not race it with a second login."""
+    if not sdk.has_operation("auth.logout"):
+        # v6 has no logout; the session simply expires
+        return
+    try:
+        await client.call(sdk.operation("auth.logout"))
+        await asyncio.sleep(LOGOUT_SETTLE_SECONDS)
+    except Exception as err:  # noqa: BLE001 - logging out is a courtesy
+        _LOGGER.debug("Could not log out the validation session: %s", describe_error(err))
+
+
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect.
+
+    Raises InvalidAuth for refused credentials and CannotConnect (or WrongPortError) for
+    anything that stops the server answering.
 
     A stored "auto" is resolved here only to test the connection — it is deliberately not
     written back. Keeping the sentinel means every setup re-resolves it, so a server upgrade
     or a newer veeam-365 moves the entry onto the newer version on its own.
     """
-    api_version_display = await async_resolve_api_version(data)
+    api_version_display = await async_resolve_api_version(hass, data)
     # Convert display version (e.g., "8") to module version (e.g., "v8") for VeeamClient
-    api_version = API_VERSIONS.get(api_version_display, DEFAULT_API_MODULE)
+    api_module = API_VERSIONS.get(api_version_display, DEFAULT_API_MODULE)
 
     try:
-        from veeam_365.client import VeeamClient
+        sdk = await hass.async_add_executor_job(load_sdk, api_module)
     except ImportError as err:
-        _LOGGER.error("Error importing veeam_365: %s", err)
-        raise ConnectionError("Failed to import veeam_365 modules") from err
+        _LOGGER.error("The installed veeam-365 cannot load API %s: %r", api_module, err)
+        raise CannotConnect(f"veeam-365 cannot load API {api_module}") from err
 
-    base_url = f"https://{data[CONF_HOST]}:{data[CONF_PORT]}"
     _LOGGER.debug(
-        "Attempting to validate connection to Veeam server at %s (verify_ssl=%s, api_version=%s)",
-        base_url,
-        data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        "Validating connection to %s:%s (api_version=%s)",
+        data[CONF_HOST],
+        data[CONF_PORT],
         api_version_display,
     )
 
-    vc = None
+    client = create_client(sdk, data)
+    connected = False
     try:
-        import json
-
-        # Create VeeamClient - constructor is not blocking
+        async with asyncio.timeout(CONNECT_TIMEOUT):
+            await client.connect()
+        connected = True
+    except VeeamAuthenticationError as err:
+        # Refused credentials prove the port is right, so there is nothing to probe
+        _LOGGER.debug("Authentication failed for %s: %s", data[CONF_USERNAME], err)
+        raise InvalidAuth from err
+    except (TimeoutError, VeeamError, httpx.HTTPError, OSError) as err:
         _LOGGER.debug(
-            "Creating VeeamClient with username=%s, api_version=%s",
-            data[CONF_USERNAME],
-            api_version,
+            "Could not connect to %s:%s: %s", data[CONF_HOST], data[CONF_PORT], describe_error(err)
         )
-        vc = VeeamClient(
-            host=base_url,
-            username=data[CONF_USERNAME],
-            password=data[CONF_PASSWORD],
-            api_version=api_version,
-            verify_ssl=data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-            disable_antiforgery_token=True,
-        )
-
-        # Connect is async, just await it directly
-        _LOGGER.debug("Calling vc.connect()...")
-        try:
-            await vc.connect()
-            _LOGGER.debug("vc.connect() succeeded")
-        except json.JSONDecodeError as err:
-            # Server returned non-JSON response (likely an error with empty body)
-            _LOGGER.error(
-                "Server at %s returned invalid JSON. Exception: %s. Position: line %s column %s.",
-                base_url,
-                err.msg,
-                err.lineno,
-                err.colno,
-                exc_info=True,
-            )
-            raise ConnectionError(
-                "Server returned invalid response. Check credentials and server."
-            ) from err
-        except Exception as err:
-            _LOGGER.error(
-                "Unexpected error during connection: %s (type: %s)",
-                err,
-                type(err).__name__,
-                exc_info=True,
-            )
-            raise
-
-    except PermissionError as err:
-        _LOGGER.error("Authentication failed for user %s: %s", data[CONF_USERNAME], err)
-        raise PermissionError("Invalid credentials") from err
-    except ConnectionError as err:
-        _LOGGER.error("Network connection error to %s: %s", base_url, err)
-        await _raise_wrong_port_if_answering(data, err)
-        raise ConnectionError(f"Cannot connect to server at {base_url}") from err
-    except Exception as err:
-        _LOGGER.error(
-            "Failed to connect to Veeam server at %s (api_version=%s): %s",
-            base_url,
-            api_version,
-            err,
-            exc_info=True,
-        )
-        await _raise_wrong_port_if_answering(data, err)
-        raise ConnectionError(f"Failed to connect: {type(err).__name__}: {err}") from err
+        await _raise_wrong_port_if_answering(hass, data, err)
+        raise CannotConnect(describe_error(err)) from err
     finally:
-        # Always logout and close the validation client to free up resources
-        if vc is not None:
-            try:
-                # Properly logout to revoke the token on the server
-                # This prevents race conditions when async_setup_entry is called
-                # immediately after config flow validation
-                try:
-                    logout_module = await asyncio.to_thread(
-                        __import__,
-                        f"veeam_365.{api_version}.api.auth.logout",
-                        fromlist=["asyncio"],
-                    )
-                    # The logout module has an async function named "asyncio" (library convention)
-                    logout_async_func = getattr(logout_module, "asyncio")
-                    await vc.call(logout_async_func)
-                    _LOGGER.debug("Successfully logged out validation VeeamClient")
-                    # Give server time to process logout before setup creates new session
-                    await asyncio.sleep(1.0)
-                except Exception as logout_err:
-                    _LOGGER.debug(
-                        "Could not logout validation client: %s (type: %s)",
-                        logout_err,
-                        type(logout_err).__name__,
-                    )
-
-                await vc.close()
-                _LOGGER.debug("Closed validation VeeamClient")
-            except Exception as err:
-                _LOGGER.warning("Error closing validation client: %s", err)
+        if connected:
+            await _logout(client, sdk)
+        await client.close()
 
     return {"title": f"Veeam 365 ({data[CONF_HOST]})"}
+
+
+async def _async_validate(
+    hass: HomeAssistant, data: dict[str, Any], errors: dict[str, str]
+) -> tuple[dict[str, Any] | None, int | None]:
+    """Run validate_input, recording the form error. Returns (info, wrong port)."""
+    try:
+        return await validate_input(hass, data), None
+    except InvalidAuth:
+        errors["base"] = "invalid_auth"
+    except WrongPortError as err:
+        # Subclasses CannotConnect, so it has to be caught before it
+        errors["base"] = "wrong_port"
+        return None, err.port
+    except CannotConnect:
+        errors["base"] = "cannot_connect"
+    except Exception:
+        _LOGGER.exception("Unexpected exception validating the connection")
+        errors["base"] = "unknown"
+    return None, None
 
 
 class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -231,10 +211,12 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> "Veeam365OptionsFlow":
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> Veeam365OptionsFlow:
         return Veeam365OptionsFlow()
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle reconfiguration of the integration."""
         errors: dict[str, str] = {}
         wrong_port: int | None = None
@@ -251,22 +233,19 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_VERIFY_SSL: user_input.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
             }
 
-            try:
-                await validate_input(self.hass, data)
-            except PermissionError:
-                errors["base"] = "invalid_auth"
-            except WrongPortError as err:
-                # Subclasses ConnectionError, so it has to be caught before it
-                errors["base"] = "wrong_port"
-                wrong_port = err.port
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception during reconfigure")
-                errors["base"] = "unknown"
-            else:
+            # The unique ID is host:port, so moving the entry to another server changes it —
+            # but never onto a server another entry already covers
+            unique_id = f"{data[CONF_HOST]}:{data[CONF_PORT]}"
+            await self.async_set_unique_id(unique_id)
+            if unique_id != reconf_entry.unique_id:
+                self._abort_if_unique_id_configured()
+
+            info, wrong_port = await _async_validate(self.hass, data, errors)
+            if info is not None:
+                # Reloads once; there is no update listener to reload a second time
                 return self.async_update_reload_and_abort(
                     reconf_entry,
+                    unique_id=unique_id,
                     data=data,
                     reason="reconfigure_successful",
                 )
@@ -296,13 +275,13 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Handle reauth upon API authentication error."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Confirm reauth dialog."""
         errors: dict[str, str] = {}
         wrong_port: int | None = None
@@ -316,20 +295,8 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_PASSWORD: user_input[CONF_PASSWORD],
             }
 
-            try:
-                await validate_input(self.hass, data)
-            except PermissionError:
-                errors["base"] = "invalid_auth"
-            except WrongPortError as err:
-                # Subclasses ConnectionError, so it has to be caught before it
-                errors["base"] = "wrong_port"
-                wrong_port = err.port
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception during reauth")
-                errors["base"] = "unknown"
-            else:
+            info, wrong_port = await _async_validate(self.hass, data, errors)
+            if info is not None:
                 return self.async_update_reload_and_abort(
                     reauth_entry,
                     data=data,
@@ -353,7 +320,7 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         wrong_port: int | None = None
 
@@ -361,20 +328,8 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}")
             self._abort_if_unique_id_configured()
 
-            try:
-                info = await validate_input(self.hass, user_input)
-            except PermissionError:
-                errors["base"] = "invalid_auth"
-            except WrongPortError as err:
-                # Subclasses ConnectionError, so it has to be caught before it
-                errors["base"] = "wrong_port"
-                wrong_port = err.port
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
-            else:
+            info, wrong_port = await _async_validate(self.hass, user_input, errors)
+            if info is not None:
                 return self.async_create_entry(title=info["title"], data=user_input)
 
         api_version_options, api_version_default = _get_api_version_selector_config(
@@ -417,30 +372,22 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class Veeam365OptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for Veeam Backup for Microsoft 365 integration."""
+class Veeam365OptionsFlow(config_entries.OptionsFlowWithReload):
+    """Handle options flow for Veeam Backup for Microsoft 365 integration.
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    OptionsFlowWithReload reloads the entry when the options change, which is why there is
+    no update listener: one would reload a second time after every reauth and reconfigure.
+    """
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         wrong_port: int | None = None
 
         if user_input is not None:
             test_data = {**self.config_entry.data, CONF_API_VERSION: user_input[CONF_API_VERSION]}
 
-            try:
-                await validate_input(self.hass, test_data)
-            except PermissionError:
-                errors["base"] = "invalid_auth"
-            except WrongPortError as err:
-                # Subclasses ConnectionError, so it has to be caught before it
-                errors["base"] = "wrong_port"
-                wrong_port = err.port
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception validating options")
-                errors["base"] = "unknown"
-            else:
+            info, wrong_port = await _async_validate(self.hass, test_data, errors)
+            if info is not None:
                 # Stored verbatim, including "auto": the point of auto is that it is
                 # re-resolved on every setup rather than frozen at the moment it was chosen
                 return self.async_create_entry(title="", data=user_input)
@@ -454,7 +401,8 @@ class Veeam365OptionsFlow(config_entries.OptionsFlow):
 
         if current_api_version not in api_version_options:
             _LOGGER.warning(
-                "Stored API version %s is invalid for Veeam Backup for Microsoft 365, falling back to default",
+                "Stored API version %s is invalid for Veeam Backup for Microsoft 365, "
+                "falling back to default",
                 current_api_version,
             )
             current_api_version = DEFAULT_API_VERSION

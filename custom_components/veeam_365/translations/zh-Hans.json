@@ -13,17 +13,17 @@
           "api_version": "API 版本"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 9419)",
-          "username": "Username with administrator privileges",
-          "password": "Password for the specified user account",
-          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
-          "api_version": "Veeam REST API version to use"
+          "host": "Veeam Backup for Microsoft 365 服务器的主机名或 IP 地址",
+          "port": "REST API 端口（默认：4443）",
+          "username": "具有管理员权限的用户名",
+          "password": "指定用户帐户的密码",
+          "verify_ssl": "启用 SSL 证书验证（仅在使用自签名证书时禁用）",
+          "api_version": "保留为 'auto' 以检测此服务器提供的最新 API 版本，或选择一个版本进行固定。"
         }
       },
       "reconfigure": {
         "title": "重新配置 Veeam Backup for Microsoft 365",
-        "description": "更新您的 Veeam Backup for Microsoft 365 服务器配置。",
+        "description": "更新 {host} 的连接详细信息。",
         "data": {
           "host": "主机",
           "port": "端口",
@@ -32,38 +32,36 @@
           "verify_ssl": "验证 SSL 证书"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port",
-          "username": "Administrator username",
-          "password": "User password",
-          "verify_ssl": "Verify SSL certificates"
+          "host": "Veeam Backup for Microsoft 365 服务器的主机名或 IP 地址",
+          "port": "REST API 端口（默认：4443）",
+          "username": "管理员用户名",
+          "password": "用户密码",
+          "verify_ssl": "验证 SSL 证书"
         }
       },
       "reauth_confirm": {
         "title": "重新验证 Veeam Backup for Microsoft 365",
-        "description": "您的 Veeam 服务器凭据需要更新。",
+        "description": "{host} 的身份验证凭据已失效。请输入新的凭据。",
         "data": {
           "username": "用户名",
           "password": "密码"
         },
         "data_description": {
-          "username": "Administrator username",
-          "password": "User password"
+          "username": "管理员用户名",
+          "password": "用户密码"
         }
       }
     },
     "error": {
       "cannot_connect": "无法连接到 Veeam 服务器",
       "invalid_auth": "身份验证凭据无效",
-      "unknown": "发生意外错误"
+      "unknown": "发生意外错误",
+      "wrong_port": "无法在该端口上连接，但 Veeam REST API 在端口 {wrong_port} 上作出了响应。Veeam Backup for Microsoft 365 默认在端口 4443 上提供 REST API；请检查控制台中配置的端口。"
     },
     "abort": {
       "already_configured": "此 Veeam 服务器已配置",
       "reauth_successful": "重新验证成功",
-      "reconfigure_successful": "重新配置成功",
-      "cannot_connect": "无法连接到 Veeam 服务器",
-      "invalid_auth": "身份验证凭据无效",
-      "unknown": "发生意外错误"
+      "reconfigure_successful": "重新配置成功"
     }
   },
   "options": {
@@ -75,197 +73,193 @@
           "api_version": "API 版本"
         },
         "data_description": {
-          "api_version": "Select the Veeam REST API version to use for this integration"
+          "api_version": "选择 'auto' 以重新检测此服务器提供的最新 API 版本。"
         }
       }
     },
     "error": {
       "cannot_connect": "无法连接到 Veeam Backup for Microsoft 365 服务器",
       "invalid_auth": "身份验证凭据无效",
-      "unknown": "发生意外错误"
+      "unknown": "发生意外错误",
+      "wrong_port": "无法在该端口上连接，但 Veeam REST API 在端口 {wrong_port} 上作出了响应。Veeam Backup for Microsoft 365 默认在端口 4443 上提供 REST API；请检查控制台中配置的端口。"
     }
   },
   "entity": {
     "sensor": {
       "job_name": {
-        "name": "Name"
+        "name": "名称"
       },
       "job_backup_type": {
-        "name": "Backup Type"
+        "name": "备份类型"
       },
       "job_last_run": {
-        "name": "Last Run"
+        "name": "上次运行"
       },
       "job_next_run": {
-        "name": "Next Run"
+        "name": "下次运行"
       },
       "job_last_backup": {
-        "name": "Last Backup"
+        "name": "上次备份"
       },
       "job_is_enabled": {
-        "name": "Enabled"
+        "name": "已启用"
       },
       "job_last_status": {
-        "name": "Last Status"
+        "name": "上次状态"
       },
       "copy_job_name": {
-        "name": "Name"
+        "name": "名称"
       },
       "copy_job_last_run": {
-        "name": "Last Run"
+        "name": "上次运行"
       },
       "copy_job_last_backup": {
-        "name": "Last Backup"
+        "name": "上次备份"
       },
       "copy_job_is_enabled": {
-        "name": "Enabled"
+        "name": "已启用"
       },
       "copy_job_last_status": {
-        "name": "Last Status"
+        "name": "上次状态"
       },
       "server_version": {
-        "name": "Product Version"
+        "name": "产品版本"
       },
       "server_installation_id": {
-        "name": "Installation ID"
+        "name": "安装 ID"
       },
       "server_last_successful_poll": {
-        "name": "Last Successful Poll"
+        "name": "上次成功轮询"
       },
       "license_status": {
-        "name": "Status"
+        "name": "状态"
       },
       "license_type": {
-        "name": "Type"
+        "name": "类型"
       },
       "license_expiration": {
-        "name": "Expiration Date"
+        "name": "到期日期"
       },
       "license_grace_period_expires": {
-        "name": "Grace Period Expiration"
+        "name": "宽限期到期"
       },
       "license_licensed_to": {
-        "name": "Licensed To"
+        "name": "授权给"
       },
       "license_total_number": {
-        "name": "Total Licenses"
+        "name": "许可证总数"
       },
       "license_used_number": {
-        "name": "Used Licenses"
+        "name": "已用许可证"
       },
       "license_new_number": {
-        "name": "New Licenses"
-      },
-      "license_auto_update": {
-        "name": "Auto Update Enabled"
+        "name": "新许可证"
       },
       "repository_type": {
-        "name": "Type"
+        "name": "类型"
       },
       "repository_description": {
-        "name": "Description"
+        "name": "描述"
       },
       "repository_used_space": {
-        "name": "Used Space"
+        "name": "已用空间"
       },
       "repository_immutability_days": {
-        "name": "Immutability Days"
+        "name": "不可变天数"
       }
     },
     "binary_sensor": {
       "server_health_ok": {
-        "name": "Health OK"
+        "name": "运行状况正常"
       },
       "server_connected": {
-        "name": "Connected"
+        "name": "已连接"
       },
-      "repository_online": {
-        "name": "Online"
+      "license_auto_update": {
+        "name": "已启用自动更新"
+      },
+      "repository_cache_in_sync": {
+        "name": "缓存已同步"
       },
       "repository_out_of_date": {
-        "name": "Out of Date"
+        "name": "已过时"
       },
       "repository_immutable": {
-        "name": "Immutable"
+        "name": "不可变"
       },
       "repository_accessible": {
-        "name": "Accessible"
+        "name": "可访问"
       }
     },
     "button": {
       "repository_rescan": {
-        "name": "Synchronize Cache"
+        "name": "同步缓存"
       },
       "job_start": {
-        "name": "Start"
+        "name": "启动"
       },
       "job_stop": {
-        "name": "Stop"
+        "name": "停止"
       },
       "job_enable": {
-        "name": "Enable"
+        "name": "启用"
       },
       "job_disable": {
-        "name": "Disable"
+        "name": "禁用"
+      },
+      "copy_job_start": {
+        "name": "启动"
+      },
+      "copy_job_stop": {
+        "name": "停止"
+      },
+      "copy_job_enable": {
+        "name": "启用"
+      },
+      "copy_job_disable": {
+        "name": "禁用"
       }
     }
   },
   "exceptions": {
     "connection_error": {
-      "message": "Failed to connect to Veeam server at {host}:{port}"
+      "message": "无法连接到位于 {host}:{port} 的 Veeam 服务器：{error}"
     },
     "authentication_failed": {
-      "message": "Authentication failed for user {username}"
-    },
-    "api_error": {
-      "message": "Veeam API error: {error}"
+      "message": "Veeam 服务器拒绝了用户 {username} 的凭据"
     },
     "repository_rescan_failed": {
-      "message": "Failed to rescan repository {repository_name}: {error}"
+      "message": "同步存储库 {repository_name} 失败：{error}"
     },
     "job_start_failed": {
-      "message": "Failed to start job {job_name}: {error}"
+      "message": "启动作业 {job_name} 失败：{error}"
     },
     "job_stop_failed": {
-      "message": "Failed to stop job {job_name}: {error}"
+      "message": "停止作业 {job_name} 失败：{error}"
     },
     "job_enable_failed": {
-      "message": "Failed to enable job {job_name}: {error}"
+      "message": "启用作业 {job_name} 失败：{error}"
     },
     "job_disable_failed": {
-      "message": "Failed to disable job {job_name}: {error}"
+      "message": "禁用作业 {job_name} 失败：{error}"
     },
-    "timeout_error": {
-      "message": "Request to Veeam server timed out"
+    "copy_job_start_failed": {
+      "message": "启动复制作业 {job_name} 失败：{error}"
     },
-    "invalid_response": {
-      "message": "Received invalid response from Veeam server"
+    "copy_job_stop_failed": {
+      "message": "停止复制作业 {job_name} 失败：{error}"
+    },
+    "copy_job_enable_failed": {
+      "message": "启用复制作业 {job_name} 失败：{error}"
+    },
+    "copy_job_disable_failed": {
+      "message": "禁用复制作业 {job_name} 失败：{error}"
     }
   },
-  "selector": {
-    "job_status": {
-      "options": {
-        "success": "Success",
-        "running": "Running",
-        "failed": "Failed",
-        "warning": "Warning",
-        "unknown": "Unknown"
-      }
-    },
-    "job_last_result": {
-      "options": {
-        "success": "Success",
-        "failed": "Failed",
-        "warning": "Warning",
-        "none": "None"
-      }
-    },
-    "license_status": {
-      "options": {
-        "valid": "Valid",
-        "expired": "Expired",
-        "invalid": "Invalid"
-      }
+  "issues": {
+    "unsupported_license": {
+      "title": "{host} 上的 Veeam 许可证不受支持",
+      "description": "位于 **{host}** 的 Veeam Backup for Microsoft 365 服务器报告的许可证为 **{license}**。\n\n此集成不支持 Community Edition 以及无法读取许可证的服务器：授权权益不同，且部分 REST API 端点的响应方式不同或根本不响应，因此实体可能缺失或不可靠。\n\n集成会继续运行——不会阻止任何操作。如果遇到问题，请在错误报告中注明此许可证类型。安装受支持的许可证或移除此集成即可清除此警告。"
     }
   }
 }

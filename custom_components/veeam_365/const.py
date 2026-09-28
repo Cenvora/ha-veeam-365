@@ -1,12 +1,16 @@
 """Constants for the Veeam Backup for Microsoft 365 integration."""
 
-import importlib.util
 import logging
-import os
 import re
 
 DOMAIN = "veeam_365"
 DEFAULT_NAME = "Veeam Backup for Microsoft 365"
+
+# Every device this integration creates is named with this prefix. Entities use
+# has_entity_name, so their entity IDs start with the device name — without a prefix of its
+# own, "License" or "Server" collides with the Backup & Replication integration's devices
+# and one of them gets a "_2" suffix.
+DEVICE_NAME_PREFIX = "VB365"
 
 # Configuration keys
 CONF_VERIFY_SSL = "verify_ssl"
@@ -28,6 +32,20 @@ DEFAULT_API_VERSION = "8"
 # veeam-365 release that adds a newer version — is picked up on the next restart.
 AUTO_API_VERSION = "auto"
 
+# Timeouts, in seconds. REQUEST_TIMEOUT bounds a single HTTP request inside the SDK;
+# UPDATE_TIMEOUT bounds a whole poll, which is several requests plus pagination, so a server
+# that accepts connections but never answers cannot wedge the coordinator.
+REQUEST_TIMEOUT = 30.0
+CONNECT_TIMEOUT = 60.0
+UPDATE_TIMEOUT = 180.0
+ACTION_TIMEOUT = 60.0
+
+# Page size for the paged v8 collection endpoints. The server default is 30, which silently
+# truncated larger installations to their first 30 jobs.
+PAGE_LIMIT = 100
+# Hard stop for pagination, in case a server keeps answering with full pages forever
+MAX_PAGES = 100
+
 _LOGGER = logging.getLogger(__name__)
 
 # Fallback used when the veeam-365 package cannot be inspected. Mirrors the versions shipped
@@ -41,59 +59,35 @@ FALLBACK_API_VERSIONS = {
 # Package directory backing DEFAULT_API_VERSION, used when a stored API version is unknown
 DEFAULT_API_MODULE = FALLBACK_API_VERSIONS[DEFAULT_API_VERSION]
 
-
-# Pattern to match version directories: v{major}
+# veeam-365 names its API packages v{major}
 _API_VERSION_PATTERN = re.compile(r"^v(\d+)$")
 
 
 def _discover_api_versions() -> dict[str, str]:
-    """Dynamically discover available API versions from the veeam_365 package.
+    """Read the API versions veeam-365 ships from its own version table.
 
     Returns:
         dict: Mapping of display version (e.g., "8") to module name (e.g., "v8"),
             ordered newest to oldest.
     """
-    discovered: list[tuple[int, str, str]] = []
-
     try:
-        # Find the veeam_365 package
-        spec = importlib.util.find_spec("veeam_365")
-        if spec is None:
-            _LOGGER.warning("veeam_365 package not found, using default API versions")
-            return dict(FALLBACK_API_VERSIONS)
-
-        # Get the package directory (handle namespace packages)
-        if spec.submodule_search_locations:
-            veeam_365_path = spec.submodule_search_locations[0]
-        elif spec.origin:
-            veeam_365_path = os.path.dirname(spec.origin)
-        else:
-            _LOGGER.warning("Could not determine veeam_365 package path, using defaults")
-            return dict(FALLBACK_API_VERSIONS)
-
-        # Scan for version directories
-        for item in os.listdir(veeam_365_path):
-            match = _API_VERSION_PATTERN.match(item)
-            if match and os.path.isdir(os.path.join(veeam_365_path, item)):
-                major = match.group(1)
-                # Convert to display format: "8"
-                discovered.append((int(major), major, item))
-
-        if not discovered:
-            _LOGGER.warning("No API versions found in veeam_365 package, using defaults")
-            return dict(FALLBACK_API_VERSIONS)
-
-        # Sort numerically so the selector order does not depend on filesystem ordering,
-        # newest first — the version most people want is then the one at the top
-        versions = {display: module for _, display, module in sorted(discovered, reverse=True)}
-
-        _LOGGER.debug("Discovered API versions: %s", list(versions.keys()))
-
-    except Exception as err:
-        _LOGGER.warning("Failed to discover API versions: %s, using defaults", err)
+        from veeam_365.versions import VERSION_TO_PACKAGE
+    except ImportError as err:
+        _LOGGER.warning("Could not read veeam-365's version table (%r), using defaults", err)
         return dict(FALLBACK_API_VERSIONS)
 
-    return versions
+    discovered: list[tuple[int, str, str]] = []
+    for module in VERSION_TO_PACKAGE:
+        match = _API_VERSION_PATTERN.match(module)
+        if match:
+            discovered.append((int(match.group(1)), match.group(1), module))
+
+    if not discovered:
+        _LOGGER.warning("veeam-365 reports no API versions, using defaults")
+        return dict(FALLBACK_API_VERSIONS)
+
+    # Sorted numerically, newest first — the version most people want is then at the top
+    return {display: module for _, display, module in sorted(discovered, reverse=True)}
 
 
 def display_version_for_module(api_module: str) -> str | None:
@@ -108,50 +102,11 @@ def display_version_for_module(api_module: str) -> str | None:
     return None
 
 
-# API Version options - dynamically discovered from veeam_365 package
+# API Version options, from veeam-365's own version table
 API_VERSIONS = _discover_api_versions()
 
 # Update interval
 UPDATE_INTERVAL = 60  # seconds
-
-
-def check_api_feature_availability(api_version: str, feature_path: str) -> bool:
-    """Check if a specific API feature (endpoint/spec model) is available in the given API version.
-
-    Args:
-        api_version: The API version to check (e.g., "8")
-        feature_path: The import path to check (e.g., "models.job_start_spec" or "api.job")
-
-    Returns:
-        bool: True if the feature is available in the API version, False otherwise
-    """
-    api_module = API_VERSIONS.get(api_version, DEFAULT_API_MODULE)
-
-    try:
-        # Try to import the module/feature
-        import_path = f"veeam_365.{api_module}.{feature_path}"
-        spec = importlib.util.find_spec(import_path)
-        return spec is not None
-    except (ImportError, ModuleNotFoundError, ValueError, AttributeError):
-        return False
-
-
-# API feature requirements mapping
-# This mapping documents which API features (models/endpoints) are required for each entity type.
-# It serves as reference documentation for developers - feature paths are used directly
-# in button.py and sensor.py via check_api_feature_availability() calls.
-API_FEATURE_REQUIREMENTS = {
-    # Button features - buttons check for API endpoint availability, not individual models
-    # Individual button methods handle model import errors gracefully at runtime
-    "job_buttons": "api.job",  # Enables all job buttons (start, stop, retry, enable, disable)
-    "copy_job_buttons": "api.copy_job",  # Enables all copy job buttons
-    "repository_buttons": "api.backup_repository",  # Enables repository synchronize button
-    # Data sources (for sensors)
-    "jobs_data": "api.job",
-    "copy_jobs_data": "api.copy_job",
-    "repositories_data": "api.backup_repository",
-    "license_data": "api.license_",
-}
 
 
 def configured_api_version(entry) -> str:
@@ -176,3 +131,16 @@ def configured_api_version(entry) -> str:
         CONF_API_VERSION, entry.data.get(CONF_API_VERSION, DEFAULT_API_VERSION)
     )
     return DEFAULT_API_VERSION if stored == AUTO_API_VERSION else stored
+
+
+def device_name(kind: str, name: str | None = None) -> str:
+    """Name a device "VB365 <Kind> <name>", leaving out the kind when the name says it.
+
+    "Daily Mail" becomes "VB365 Job Daily Mail", but "Daily Mail Job" becomes
+    "VB365 Daily Mail Job" rather than "VB365 Job Daily Mail Job".
+    """
+    if not name:
+        return f"{DEVICE_NAME_PREFIX} {kind}"
+    if re.search(rf"\b{re.escape(kind)}\b", name, re.IGNORECASE):
+        return f"{DEVICE_NAME_PREFIX} {name}"
+    return f"{DEVICE_NAME_PREFIX} {kind} {name}"

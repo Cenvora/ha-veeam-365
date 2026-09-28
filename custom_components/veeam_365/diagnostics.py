@@ -35,6 +35,9 @@ async def async_get_config_entry_diagnostics(
         },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
+            "last_exception": (
+                repr(coordinator.last_exception) if coordinator.last_exception else None
+            ),
             "last_update_success_time": (
                 coordinator.last_update_success_time.isoformat()
                 if coordinator.last_update_success_time
@@ -45,9 +48,10 @@ async def async_get_config_entry_diagnostics(
             "jobs_count": len(data.get("jobs", [])),
             "copy_jobs_count": len(data.get("copy_jobs", [])),
             "repositories_count": len(data.get("repositories", [])),
-            "sobrs_count": len(data.get("sobrs", [])),
             "has_server_info": data.get("server_info") is not None,
             "has_license_info": data.get("license_info") is not None,
+            # Which endpoints answered on the last successful poll
+            "fetch_ok": data.get("fetch_ok", {}),
         },
     }
 
@@ -96,6 +100,7 @@ async def async_get_config_entry_diagnostics(
         diagnostics_data["integration_diagnostics"] = {
             "connected": data["diagnostics"].get("connected"),
             "health_ok": data["diagnostics"].get("health_ok"),
+            "failed_endpoints": data["diagnostics"].get("failed_endpoints", []),
             "last_successful_poll": (
                 data["diagnostics"]["last_successful_poll"].isoformat()
                 if data["diagnostics"].get("last_successful_poll")

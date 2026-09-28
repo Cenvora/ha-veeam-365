@@ -13,17 +13,17 @@
           "api_version": "Verze API"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port (default: 9419)",
-          "username": "Username with administrator privileges",
-          "password": "Password for the specified user account",
-          "verify_ssl": "Enable SSL certificate verification (disable only for self-signed certificates)",
-          "api_version": "Veeam REST API version to use"
+          "host": "Název hostitele nebo IP adresa serveru Veeam Backup for Microsoft 365",
+          "port": "Port REST API (výchozí: 4443)",
+          "username": "Uživatelské jméno s oprávněními správce",
+          "password": "Heslo zadaného uživatelského účtu",
+          "verify_ssl": "Povolit ověřování certifikátu SSL (zakažte pouze u certifikátů podepsaných svým držitelem)",
+          "api_version": "Ponechte 'auto' pro zjištění nejnovější verze API, kterou tento server poskytuje, nebo vyberte verzi, kterou chcete pevně nastavit."
         }
       },
       "reconfigure": {
         "title": "Překonfigurovat Veeam Backup for Microsoft 365",
-        "description": "Aktualizujte konfiguraci serveru Veeam Backup for Microsoft 365.",
+        "description": "Aktualizujte údaje o připojení pro {host}.",
         "data": {
           "host": "Hostitel",
           "port": "Port",
@@ -32,38 +32,36 @@
           "verify_ssl": "Ověřit certifikát SSL"
         },
         "data_description": {
-          "host": "Hostname or IP address of the Veeam Backup for Microsoft 365 server",
-          "port": "REST API port",
-          "username": "Administrator username",
-          "password": "User password",
-          "verify_ssl": "Verify SSL certificates"
+          "host": "Název hostitele nebo IP adresa serveru Veeam Backup for Microsoft 365",
+          "port": "Port REST API (výchozí: 4443)",
+          "username": "Uživatelské jméno správce",
+          "password": "Heslo uživatele",
+          "verify_ssl": "Ověřovat certifikáty SSL"
         }
       },
       "reauth_confirm": {
         "title": "Znovu ověřit Veeam Backup for Microsoft 365",
-        "description": "Přihlašovací údaje pro váš server Veeam je třeba aktualizovat.",
+        "description": "Přihlašovací údaje pro {host} již nejsou platné. Zadejte prosím nové přihlašovací údaje.",
         "data": {
           "username": "Uživatelské jméno",
           "password": "Heslo"
         },
         "data_description": {
-          "username": "Administrator username",
-          "password": "User password"
+          "username": "Uživatelské jméno správce",
+          "password": "Heslo uživatele"
         }
       }
     },
     "error": {
       "cannot_connect": "Nepodařilo se připojit k serveru Veeam",
       "invalid_auth": "Neplatné přihlašovací údaje",
-      "unknown": "Došlo k neočekávané chybě"
+      "unknown": "Došlo k neočekávané chybě",
+      "wrong_port": "Na tomto portu se nepodařilo připojit, ale Veeam REST API odpověděla na portu {wrong_port}. Veeam Backup for Microsoft 365 ve výchozím nastavení poskytuje REST API na portu 4443; zkontrolujte port nastavený v konzoli."
     },
     "abort": {
       "already_configured": "Tento server Veeam je již nakonfigurován",
       "reauth_successful": "Opětovné ověření bylo úspěšné",
-      "reconfigure_successful": "Překonfigurace byla úspěšná",
-      "cannot_connect": "Nepodařilo se připojit k serveru Veeam",
-      "invalid_auth": "Neplatné přihlašovací údaje",
-      "unknown": "Došlo k neočekávané chybě"
+      "reconfigure_successful": "Překonfigurace byla úspěšná"
     }
   },
   "options": {
@@ -75,197 +73,193 @@
           "api_version": "Verze API"
         },
         "data_description": {
-          "api_version": "Select the Veeam REST API version to use for this integration"
+          "api_version": "Vyberte 'auto' pro opětovné zjištění nejnovější verze API, kterou tento server poskytuje."
         }
       }
     },
     "error": {
       "cannot_connect": "Nepodařilo se připojit k serveru Veeam Backup for Microsoft 365",
       "invalid_auth": "Neplatné přihlašovací údaje",
-      "unknown": "Došlo k neočekávané chybě"
+      "unknown": "Došlo k neočekávané chybě",
+      "wrong_port": "Na tomto portu se nepodařilo připojit, ale Veeam REST API odpověděla na portu {wrong_port}. Veeam Backup for Microsoft 365 ve výchozím nastavení poskytuje REST API na portu 4443; zkontrolujte port nastavený v konzoli."
     }
   },
   "entity": {
     "sensor": {
       "job_name": {
-        "name": "Name"
+        "name": "Název"
       },
       "job_backup_type": {
-        "name": "Backup Type"
+        "name": "Typ zálohy"
       },
       "job_last_run": {
-        "name": "Last Run"
+        "name": "Poslední spuštění"
       },
       "job_next_run": {
-        "name": "Next Run"
+        "name": "Příští spuštění"
       },
       "job_last_backup": {
-        "name": "Last Backup"
+        "name": "Poslední záloha"
       },
       "job_is_enabled": {
-        "name": "Enabled"
+        "name": "Povoleno"
       },
       "job_last_status": {
-        "name": "Last Status"
+        "name": "Poslední stav"
       },
       "copy_job_name": {
-        "name": "Name"
+        "name": "Název"
       },
       "copy_job_last_run": {
-        "name": "Last Run"
+        "name": "Poslední spuštění"
       },
       "copy_job_last_backup": {
-        "name": "Last Backup"
+        "name": "Poslední záloha"
       },
       "copy_job_is_enabled": {
-        "name": "Enabled"
+        "name": "Povoleno"
       },
       "copy_job_last_status": {
-        "name": "Last Status"
+        "name": "Poslední stav"
       },
       "server_version": {
-        "name": "Product Version"
+        "name": "Verze produktu"
       },
       "server_installation_id": {
-        "name": "Installation ID"
+        "name": "ID instalace"
       },
       "server_last_successful_poll": {
-        "name": "Last Successful Poll"
+        "name": "Poslední úspěšné dotazování"
       },
       "license_status": {
-        "name": "Status"
+        "name": "Stav"
       },
       "license_type": {
-        "name": "Type"
+        "name": "Typ"
       },
       "license_expiration": {
-        "name": "Expiration Date"
+        "name": "Datum vypršení platnosti"
       },
       "license_grace_period_expires": {
-        "name": "Grace Period Expiration"
+        "name": "Konec období odkladu"
       },
       "license_licensed_to": {
-        "name": "Licensed To"
+        "name": "Licencováno pro"
       },
       "license_total_number": {
-        "name": "Total Licenses"
+        "name": "Celkem licencí"
       },
       "license_used_number": {
-        "name": "Used Licenses"
+        "name": "Využité licence"
       },
       "license_new_number": {
-        "name": "New Licenses"
-      },
-      "license_auto_update": {
-        "name": "Auto Update Enabled"
+        "name": "Nové licence"
       },
       "repository_type": {
-        "name": "Type"
+        "name": "Typ"
       },
       "repository_description": {
-        "name": "Description"
+        "name": "Popis"
       },
       "repository_used_space": {
-        "name": "Used Space"
+        "name": "Využité místo"
       },
       "repository_immutability_days": {
-        "name": "Immutability Days"
+        "name": "Dny neměnnosti"
       }
     },
     "binary_sensor": {
       "server_health_ok": {
-        "name": "Health OK"
+        "name": "Stav v pořádku"
       },
       "server_connected": {
-        "name": "Connected"
+        "name": "Připojeno"
       },
-      "repository_online": {
-        "name": "Online"
+      "license_auto_update": {
+        "name": "Automatická aktualizace povolena"
+      },
+      "repository_cache_in_sync": {
+        "name": "Mezipaměť synchronizována"
       },
       "repository_out_of_date": {
-        "name": "Out of Date"
+        "name": "Zastaralé"
       },
       "repository_immutable": {
-        "name": "Immutable"
+        "name": "Neměnné"
       },
       "repository_accessible": {
-        "name": "Accessible"
+        "name": "Přístupné"
       }
     },
     "button": {
       "repository_rescan": {
-        "name": "Synchronize Cache"
+        "name": "Synchronizovat mezipaměť"
       },
       "job_start": {
-        "name": "Start"
+        "name": "Spustit"
       },
       "job_stop": {
-        "name": "Stop"
+        "name": "Zastavit"
       },
       "job_enable": {
-        "name": "Enable"
+        "name": "Povolit"
       },
       "job_disable": {
-        "name": "Disable"
+        "name": "Zakázat"
+      },
+      "copy_job_start": {
+        "name": "Spustit"
+      },
+      "copy_job_stop": {
+        "name": "Zastavit"
+      },
+      "copy_job_enable": {
+        "name": "Povolit"
+      },
+      "copy_job_disable": {
+        "name": "Zakázat"
       }
     }
   },
   "exceptions": {
     "connection_error": {
-      "message": "Failed to connect to Veeam server at {host}:{port}"
+      "message": "Nepodařilo se připojit k serveru Veeam na adrese {host}:{port}: {error}"
     },
     "authentication_failed": {
-      "message": "Authentication failed for user {username}"
-    },
-    "api_error": {
-      "message": "Veeam API error: {error}"
+      "message": "Server Veeam odmítl přihlašovací údaje uživatele {username}"
     },
     "repository_rescan_failed": {
-      "message": "Failed to rescan repository {repository_name}: {error}"
+      "message": "Nepodařilo se synchronizovat úložiště {repository_name}: {error}"
     },
     "job_start_failed": {
-      "message": "Failed to start job {job_name}: {error}"
+      "message": "Nepodařilo se spustit úlohu {job_name}: {error}"
     },
     "job_stop_failed": {
-      "message": "Failed to stop job {job_name}: {error}"
+      "message": "Nepodařilo se zastavit úlohu {job_name}: {error}"
     },
     "job_enable_failed": {
-      "message": "Failed to enable job {job_name}: {error}"
+      "message": "Nepodařilo se povolit úlohu {job_name}: {error}"
     },
     "job_disable_failed": {
-      "message": "Failed to disable job {job_name}: {error}"
+      "message": "Nepodařilo se zakázat úlohu {job_name}: {error}"
     },
-    "timeout_error": {
-      "message": "Request to Veeam server timed out"
+    "copy_job_start_failed": {
+      "message": "Nepodařilo se spustit úlohu kopírování {job_name}: {error}"
     },
-    "invalid_response": {
-      "message": "Received invalid response from Veeam server"
+    "copy_job_stop_failed": {
+      "message": "Nepodařilo se zastavit úlohu kopírování {job_name}: {error}"
+    },
+    "copy_job_enable_failed": {
+      "message": "Nepodařilo se povolit úlohu kopírování {job_name}: {error}"
+    },
+    "copy_job_disable_failed": {
+      "message": "Nepodařilo se zakázat úlohu kopírování {job_name}: {error}"
     }
   },
-  "selector": {
-    "job_status": {
-      "options": {
-        "success": "Success",
-        "running": "Running",
-        "failed": "Failed",
-        "warning": "Warning",
-        "unknown": "Unknown"
-      }
-    },
-    "job_last_result": {
-      "options": {
-        "success": "Success",
-        "failed": "Failed",
-        "warning": "Warning",
-        "none": "None"
-      }
-    },
-    "license_status": {
-      "options": {
-        "valid": "Valid",
-        "expired": "Expired",
-        "invalid": "Invalid"
-      }
+  "issues": {
+    "unsupported_license": {
+      "title": "Nepodporovaná licence Veeam na {host}",
+      "description": "Server Veeam Backup for Microsoft 365 na adrese **{host}** hlásí licenci **{license}**.\n\nCommunity Edition a servery, jejichž licenci nelze přečíst, tato integrace nepodporuje: oprávnění se liší a některé koncové body REST API odpovídají jinak nebo vůbec, takže entity mohou chybět nebo být nespolehlivé.\n\nIntegrace dál běží — nic není blokováno. Pokud narazíte na problémy, uveďte prosím tento typ licence v hlášení chyby. Toto upozornění odstraníte instalací podporované licence nebo odebráním integrace."
     }
   }
 }
