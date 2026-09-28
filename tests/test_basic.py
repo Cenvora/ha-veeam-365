@@ -173,11 +173,15 @@ def test_every_translation_key_in_code_exists():
         *sensor.JOB_SENSORS,
         *sensor.COPY_JOB_SENSORS,
         *sensor.REPOSITORY_SENSORS,
+        *sensor.PROXY_SENSORS,
         *sensor.SERVER_SENSORS,
         *sensor.LICENSE_SENSORS,
     ):
         assert description.translation_key in entity["sensor"], description.translation_key
-    for description in binary_sensor.REPOSITORY_BINARY_SENSORS:
+    for description in (
+        *binary_sensor.REPOSITORY_BINARY_SENSORS,
+        *binary_sensor.PROXY_BINARY_SENSORS,
+    ):
         assert description.translation_key in entity["binary_sensor"]
     for description in (*button.JOB_BUTTONS, *button.COPY_JOB_BUTTONS, *button.REPOSITORY_BUTTONS):
         assert description.translation_key in entity["button"], description.translation_key

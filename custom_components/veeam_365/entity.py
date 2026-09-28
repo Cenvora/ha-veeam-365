@@ -24,6 +24,7 @@ ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     "jobs": ("job", "Job", "Backup Job"),
     "copy_jobs": ("copy_job", "Copy Job", "Backup Copy Job"),
     "repositories": ("repository", "Repository", "Backup Repository"),
+    "proxies": ("proxy", "Proxy", "Backup Proxy"),
 }
 
 
@@ -120,7 +121,7 @@ class VeeamLicenseEntity(VeeamEntity):
 
 
 class VeeamItemEntity(VeeamEntity):
-    """An entity on the device of one job, copy job or repository."""
+    """An entity on the device of one job, copy job, repository or proxy."""
 
     def __init__(
         self,

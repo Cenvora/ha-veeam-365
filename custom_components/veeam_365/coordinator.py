@@ -52,6 +52,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "server_info": None,
     "license_info": None,
     "repositories": [],
+    "proxies": [],
     "health": None,
 }
 
@@ -60,7 +61,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
 HEALTH_OPERATION = "health.health_get"
 
 # Collections whose items become devices, keyed by data key
-COLLECTIONS = ("jobs", "copy_jobs", "repositories")
+COLLECTIONS = ("jobs", "copy_jobs", "repositories", "proxies")
 
 # Errors that mean the server could not be reached or did not answer in time
 TRANSPORT_ERRORS = (httpx.HTTPError, OSError, TimeoutError)
@@ -288,6 +289,48 @@ def parse_repository(repo: Any) -> dict[str, Any] | None:
         # the Invalid state.
         "is_cache_in_sync": None if is_out_of_sync is None else not is_out_of_sync,
         "is_accessible": None if is_out_of_order is None else not is_out_of_order,
+    }
+
+
+def _percent(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return round(float(value), 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_proxy(proxy: Any) -> dict[str, Any] | None:
+    proxy_id = id_field(proxy)
+    if proxy_id is None:
+        return None
+    status = text_field(proxy, "status")
+    maintenance = text_field(proxy, "maintenance_mode_state")
+    operating_system = text_field(proxy, "operating_system")
+    roles = field(proxy, "role") or []
+    return {
+        "id": proxy_id,
+        # v7 and later also report the FQDN; the host name is what the console shows
+        "name": first_field(proxy, "host_name", "fqdn") or "Unknown Proxy",
+        "fqdn": text_field(proxy, "fqdn"),
+        "description": text_field(proxy, "description", ""),
+        "port": int_field(proxy, "port"),
+        "is_online": None if status is None else status == "Online",
+        "status_raw": status,
+        # Whether this API version reports maintenance mode, usage and version at all (v8).
+        # Read from the model rather than the values, so a v8 proxy that is offline and
+        # reports none of them still gets its sensors, and older versions get none.
+        "reports_details": hasattr(proxy, "maintenance_mode_state"),
+        "maintenance_mode": humanize(maintenance, "Unknown"),
+        "maintenance_mode_raw": maintenance,
+        "cpu_usage_percent": _percent(field(proxy, "cpu_usage_percent")),
+        "memory_usage_percent": _percent(field(proxy, "memory_usage_percent")),
+        "version": text_field(proxy, "version"),
+        "operating_system": humanize(operating_system, "Unknown"),
+        "operating_system_raw": operating_system,
+        "proxy_pool_id": id_field(proxy, "proxy_pool_id"),
+        "roles": [str(clean(role)) for role in roles if not is_missing(role)],
     }
 
 
@@ -520,6 +563,7 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "server_info": self._fetch_server_info,
             "license_info": self._fetch_license,
             "repositories": self._fetch_repositories,
+            "proxies": self._fetch_proxies,
         }
         if self.sdk.has_operation(HEALTH_OPERATION):
             fetchers["health"] = self._fetch_health
@@ -610,6 +654,11 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         repositories = parse_items("repositories", items, parse_repository)
         _LOGGER.debug("Fetched %d repositories", len(repositories))
         return repositories
+
+    async def _fetch_proxies(self) -> list[dict[str, Any]]:
+        return parse_items(
+            "proxies", await self._fetch_collection("proxy.proxy_get_proxies"), parse_proxy
+        )
 
     async def _fetch_server_info(self) -> dict[str, Any]:
         return parse_server_info(await self._call("service_instance.service_instance_get"))

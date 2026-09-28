@@ -23,6 +23,8 @@ COPY_JOB_ID = "22222222-2222-2222-2222-222222222222"
 REPO_ID = "33333333-3333-3333-3333-333333333333"
 OBJECT_REPO_ID = "44444444-4444-4444-4444-444444444444"
 INSTALLATION_ID = "55555555-5555-5555-5555-555555555555"
+PROXY_ID = "66666666-6666-6666-6666-666666666666"
+POOL_ID = "77777777-7777-7777-7777-777777777777"
 
 ENTRY_DATA = {
     "host": "veeam.example.com",
@@ -115,6 +117,28 @@ def object_repo_json(repo_id: str = OBJECT_REPO_ID, name: str = "S3 Archive", **
     return data
 
 
+def proxy_json(proxy_id: str = PROXY_ID, host_name: str = "proxy01", **overrides) -> dict:
+    """A v8 proxy. Older versions' models ignore the fields they do not have."""
+    data = {
+        "id": proxy_id,
+        "hostName": host_name,
+        "fqdn": f"{host_name}.example.com",
+        "description": "Backup proxy",
+        "port": 9193,
+        "type": "Domain",
+        "status": "Online",
+        "maintenanceModeState": "Disabled",
+        "cpuUsagePercent": 23.46,
+        "memoryUsagePercent": 61.0,
+        "version": "8.1.0.305",
+        "operatingSystem": "Windows",
+        "proxyPoolId": POOL_ID,
+        "role": ["Processor"],
+    }
+    data.update(overrides)
+    return data
+
+
 def license_json(**overrides) -> dict:
     data = {
         "status": "Valid",
@@ -152,6 +176,7 @@ PAGE_CLASSES = {
         "RESTBackupRepository",
         "PageOfRESTBackupRepository",
     ),
+    "proxy.proxy_get_proxies": ("RESTProxy", "PageOfRESTProxy"),
 }
 
 
@@ -168,6 +193,7 @@ class FakeServer:
                 local_repo_json(),
                 object_repo_json(),
             ],
+            "proxy.proxy_get_proxies": [proxy_json()],
         }
         self.license = license_json()
         self.health = health_json()

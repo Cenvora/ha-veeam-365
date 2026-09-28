@@ -166,6 +166,21 @@
       },
       "repository_immutability_days": {
         "name": "Dny neměnnosti"
+      },
+      "proxy_maintenance_mode": {
+        "name": "Režim údržby"
+      },
+      "proxy_cpu_usage": {
+        "name": "Využití CPU"
+      },
+      "proxy_memory_usage": {
+        "name": "Využití paměti"
+      },
+      "proxy_version": {
+        "name": "Verze"
+      },
+      "proxy_operating_system": {
+        "name": "Operační systém"
       }
     },
     "binary_sensor": {
@@ -192,6 +207,9 @@
       },
       "repository_accessible": {
         "name": "Přístupné"
+      },
+      "proxy_online": {
+        "name": "Online"
       }
     },
     "button": {

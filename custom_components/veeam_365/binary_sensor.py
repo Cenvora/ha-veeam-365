@@ -12,6 +12,7 @@ one upgrade moves them rather than leaving two of everything.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 from typing import Any
@@ -58,18 +59,19 @@ def _drop_superseded_sensor_entities(hass: HomeAssistant, entry: ConfigEntry, en
 
 
 @dataclass(frozen=True, kw_only=True)
-class VeeamRepositoryBinaryDescription(BinarySensorEntityDescription):
-    """A repository flag. ``key`` is the unique ID suffix — never change it."""
+class VeeamItemBinaryDescription(BinarySensorEntityDescription):
+    """A flag of one repository or proxy. ``key`` is the unique ID suffix — never change it."""
 
     value_key: str
     icon_on: str
     icon_off: str
+    attributes_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 
 
 # The unique ID suffixes are historical: "online" reported is_out_of_sync all along, so it
 # keeps its ID (and history) under the name that says what it is.
-REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
-    VeeamRepositoryBinaryDescription(
+REPOSITORY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
         key="online",
         translation_key="repository_cache_in_sync",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -77,7 +79,7 @@ REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
         icon_on="mdi:sync",
         icon_off="mdi:sync-alert",
     ),
-    VeeamRepositoryBinaryDescription(
+    VeeamItemBinaryDescription(
         key="out_of_date",
         translation_key="repository_out_of_date",
         device_class=BinarySensorDeviceClass.PROBLEM,
@@ -88,7 +90,7 @@ REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
     ),
     # No device class: immutability being off is a configuration choice, not a problem,
     # and PROBLEM would colour it red
-    VeeamRepositoryBinaryDescription(
+    VeeamItemBinaryDescription(
         key="immutable",
         translation_key="repository_immutable",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -96,7 +98,7 @@ REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
         icon_on="mdi:lock",
         icon_off="mdi:lock-open",
     ),
-    VeeamRepositoryBinaryDescription(
+    VeeamItemBinaryDescription(
         key="accessible",
         translation_key="repository_accessible",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
@@ -104,6 +106,24 @@ REPOSITORY_BINARY_SENSORS: tuple[VeeamRepositoryBinaryDescription, ...] = (
         value_key="is_accessible",
         icon_on="mdi:folder-open",
         icon_off="mdi:folder-lock",
+    ),
+)
+
+PROXY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
+        key="online",
+        translation_key="proxy_online",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        value_key="is_online",
+        icon_on="mdi:server-network",
+        icon_off="mdi:server-network-off",
+        attributes_fn=lambda proxy: {
+            "raw_value": proxy.get("status_raw"),
+            "fqdn": proxy.get("fqdn"),
+            "port": proxy.get("port"),
+            "roles": proxy.get("roles") or [],
+            "proxy_pool_id": proxy.get("proxy_pool_id"),
+        },
     ),
 )
 
@@ -120,13 +140,25 @@ async def async_setup_entry(
         _drop_superseded_sensor_entities(hass, entry, entities)
         async_add_entities(entities)
 
-    def repository_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
-        return [
-            VeeamRepositoryBinarySensor(coordinator, entry, item, description)
-            for description in REPOSITORY_BINARY_SENSORS
-        ]
+    def item_sensors(key: str, descriptions: tuple[VeeamItemBinaryDescription, ...]):
+        def factory(item: dict[str, Any]) -> list[BinarySensorEntity]:
+            return [
+                VeeamItemBinarySensor(coordinator, entry, key, item, description)
+                for description in descriptions
+            ]
 
-    async_track_items(coordinator, entry, "repositories", repository_sensors, add)
+        return factory
+
+    async_track_items(
+        coordinator,
+        entry,
+        "repositories",
+        item_sensors("repositories", REPOSITORY_BINARY_SENSORS),
+        add,
+    )
+    async_track_items(
+        coordinator, entry, "proxies", item_sensors("proxies", PROXY_BINARY_SENSORS), add
+    )
 
     server_sensors: list[BinarySensorEntity] = [
         VeeamServerHealthOkSensor(coordinator, entry),
@@ -272,26 +304,32 @@ class VeeamLicenseAutoUpdateSensor(VeeamLicenseEntity, BinarySensorEntity):
 
 
 # ===========================
-# REPOSITORY BINARY SENSORS (device per repository)
+# REPOSITORY AND PROXY BINARY SENSORS (device per item)
 # ===========================
 
 
-class VeeamRepositoryBinarySensor(VeeamItemEntity, BinarySensorEntity):
-    """One repository flag. Unknown on API versions that do not report it."""
+class VeeamItemBinarySensor(VeeamItemEntity, BinarySensorEntity):
+    """One flag of a repository or proxy. Unknown on API versions that do not report it."""
 
-    entity_description: VeeamRepositoryBinaryDescription
+    entity_description: VeeamItemBinaryDescription
 
-    def __init__(self, coordinator, entry, item, description: VeeamRepositoryBinaryDescription):
+    def __init__(self, coordinator, entry, key, item, description: VeeamItemBinaryDescription):
         self.entity_description = description
         super().__init__(
-            coordinator, entry, "repositories", item, description.key, description.translation_key
+            coordinator, entry, key, item, description.key, description.translation_key
         )
 
     @property
     def is_on(self) -> bool | None:
-        repo = self.item
-        value = repo.get(self.entity_description.value_key) if repo else None
+        item = self.item
+        value = item.get(self.entity_description.value_key) if item else None
         return None if value is None else bool(value)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attributes_fn = self.entity_description.attributes_fn
+        item = self.item
+        return attributes_fn(item) if attributes_fn and item else None
 
     @property
     def icon(self) -> str:

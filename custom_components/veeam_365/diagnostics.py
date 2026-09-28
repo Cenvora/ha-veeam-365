@@ -48,6 +48,7 @@ async def async_get_config_entry_diagnostics(
             "jobs_count": len(data.get("jobs", [])),
             "copy_jobs_count": len(data.get("copy_jobs", [])),
             "repositories_count": len(data.get("repositories", [])),
+            "proxies_count": len(data.get("proxies", [])),
             "has_server_info": data.get("server_info") is not None,
             "has_license_info": data.get("license_info") is not None,
             # Which endpoints answered on the last successful poll
@@ -102,6 +103,16 @@ async def async_get_config_entry_diagnostics(
             repo_type = repo.get("type", "unknown")
             repos_summary[repo_type] = repos_summary.get(repo_type, 0) + 1
         diagnostics_data["repositories_summary"] = repos_summary
+
+    # Proxy states, without host names
+    if data.get("proxies"):
+        proxies_summary: dict[str, int] = {}
+        for proxy in data["proxies"]:
+            status = proxy.get("status_raw") or "unknown"
+            maintenance = proxy.get("maintenance_mode_raw")
+            state = f"{status} (maintenance {maintenance})" if maintenance else status
+            proxies_summary[state] = proxies_summary.get(state, 0) + 1
+        diagnostics_data["proxies_summary"] = proxies_summary
 
     # Add diagnostics info
     if data.get("diagnostics"):

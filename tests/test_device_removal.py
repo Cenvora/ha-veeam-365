@@ -51,6 +51,7 @@ def data(**overrides):
         "jobs": [{"id": "job-1", "name": "Nightly"}],
         "copy_jobs": [{"id": "copy-1", "name": "Nightly copy"}],
         "repositories": [{"id": "repo-1", "name": "Default"}],
+        "proxies": [{"id": "proxy-1", "name": "proxy01"}],
         "server_info": {"version": "8.0.0.0"},
         "license_info": {"status": "Valid"},
     }
@@ -68,6 +69,7 @@ def ids(identifier):
         "job_job-1",
         "copy_job_copy-1",
         "repository_repo-1",
+        "proxy_proxy-1",
         f"server_{ENTRY_ID}",
         f"license_{ENTRY_ID}",
     ],
@@ -79,7 +81,7 @@ def test_live_devices_may_not_be_deleted(is_current, identifier):
 
 @pytest.mark.parametrize(
     "identifier",
-    ["job_job-9", "copy_job_copy-9", "repository_repo-9"],
+    ["job_job-9", "copy_job_copy-9", "repository_repo-9", "proxy_proxy-9"],
 )
 def test_deleted_objects_may_be_removed(is_current, identifier):
     """The reported case: a repository deleted in Veeam should be purgeable in HA."""

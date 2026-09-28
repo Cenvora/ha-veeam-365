@@ -102,6 +102,7 @@ object it is:
 | Backup job | `VB365 Job <job name>` |
 | Backup copy job | `VB365 Copy Job <copy job name>` |
 | Repository | `VB365 Repository <repository name>` |
+| Backup proxy | `VB365 Proxy <host name>` |
 
 The kind is left out when the name already says it, so a job called "Daily Mail Job" is
 `VB365 Daily Mail Job`, not `VB365 Job Daily Mail Job`.
@@ -148,7 +149,7 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  repositories, license, server info, health report) answers with an error; the
+  repositories, proxies, license, server info, health report) answers with an error; the
   `failed_endpoints` attribute says which. This is about whether the integration's polls get
   answers, not about the server's own health — that is Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
@@ -161,6 +162,7 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
   synchronizing. It used to be called **Online**, which it never measured; existing
   installations keep its `_online` entity ID.
 - Repository **Out of Date** (API v8) and **Immutable**, and license **Auto Update Enabled**.
+- Proxy **Online** — off when the server reports the backup proxy as Offline.
 
 > [!IMPORTANT]
 > These entities previously lived in the `sensor` domain. Upgrading moves them: `sensor.*`
@@ -202,6 +204,13 @@ Start, Stop, Enable and Disable buttons.
 Per **repository**: Type, Description, Used Space (GiB; local repositories report capacity
 minus free space, object storage repositories their used space) and, when immutability is
 on, Immutability Days sensors; the binary sensors above; and a Synchronize Cache button.
+
+Per **backup proxy**: an Online binary sensor (with the FQDN, port, roles and proxy pool as
+attributes) on every API version. API v8 adds Maintenance Mode (Disabled, Enabling or
+Enabled, with the untouched value as `raw_value`), CPU Usage and Memory Usage (%), Version
+and Operating System sensors. An offline proxy reports no usage, so those read unknown until
+it is back. Maintenance mode is read-only: VB365 needs the proxy host's own administrator or
+SSH credentials to switch it, which this integration does not hold.
 
 On the **server**: Product Version, Installation ID and Last Successful Poll sensors, and the
 Connected, Health OK and (API v8) Service Health binary sensors.

@@ -166,6 +166,21 @@
       },
       "repository_immutability_days": {
         "name": "Onveranderbaarheidsdagen"
+      },
+      "proxy_maintenance_mode": {
+        "name": "Onderhoudsmodus"
+      },
+      "proxy_cpu_usage": {
+        "name": "CPU-gebruik"
+      },
+      "proxy_memory_usage": {
+        "name": "Geheugengebruik"
+      },
+      "proxy_version": {
+        "name": "Versie"
+      },
+      "proxy_operating_system": {
+        "name": "Besturingssysteem"
       }
     },
     "binary_sensor": {
@@ -192,6 +207,9 @@
       },
       "repository_accessible": {
         "name": "Toegankelijk"
+      },
+      "proxy_online": {
+        "name": "Online"
       }
     },
     "button": {
