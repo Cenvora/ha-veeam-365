@@ -785,6 +785,20 @@ async def test_organizations_get_a_device_each(hass: HomeAssistant, server: Fake
     assert device.model == "Microsoft 365 Organization"
 
 
+@pytest.mark.parametrize("version", ["6", "7", "8"])
+async def test_organizations_are_read_in_the_extended_view(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    """Only the extended view says whether and when an organization was backed up.
+
+    v7 and v8 default to the short view, where both would read unknown.
+    """
+    await setup_entry(hass, api_version=version)
+
+    assert state(hass, f"binary_sensor.{ORG}_backed_up") == STATE_ON
+    assert state(hass, f"sensor.{ORG}_last_backup") == "2026-09-27T05:10:00+00:00"
+
+
 async def test_organization_sync_state_v8(hass: HomeAssistant, server: FakeServer) -> None:
     entry = await setup_entry(hass)
 
