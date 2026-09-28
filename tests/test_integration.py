@@ -5,6 +5,7 @@ Run against the fake server in conftest.py, which answers through the real veeam
 
 from __future__ import annotations
 
+from datetime import timedelta
 import ssl
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
@@ -12,6 +13,7 @@ from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UN
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+from homeassistant.util import dt as dt_util
 import httpx
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -31,6 +33,7 @@ from .conftest import (
     FakeServer,
     health_json,
     job_json,
+    job_session_json,
     maintenance_json,
     organization_json,
     protected_json,
@@ -1222,3 +1225,135 @@ async def test_the_version_is_remembered_when_server_info_later_fails(
 
     assert len(server.calls_to(MAINTENANCE_SESSIONS)) == 2
     assert state(hass, f"binary_sensor.{LOCAL_REPO}_maintenance") == STATE_OFF
+
+
+# ---------------------------------------------------------------------------
+# Job sessions (API v8)
+# ---------------------------------------------------------------------------
+
+JOB_SESSIONS = "job_session.job_session_get"
+JOB_SESSION = "job_session.job_session_get_by_id"
+RUNNING_SESSION = "5e550009-0000-0000-0000-000000000000"
+
+
+async def test_each_job_shows_its_latest_session(hass: HomeAssistant, server: FakeServer) -> None:
+    await setup_entry(hass)
+
+    last = hass.states.get(f"sensor.{JOB}_last_session")
+    # The session an hour ago, not the one three hours ago
+    assert last.attributes["session_id"] == "5e550002-0000-0000-0000-000000000000"
+    assert last.attributes["status"] == "Success"
+    assert last.attributes["type"] == "Incremental"
+    assert last.attributes["details"] == "All items processed successfully."
+    assert last.attributes["bottleneck"] == "Source"
+    # 15 minutes, 1 GiB, 120 objects
+    assert state(hass, f"sensor.{JOB}_last_session_duration") == "15.0"
+    assert state(hass, f"sensor.{JOB}_last_session_transferred") == "1024.0"
+    assert state(hass, f"sensor.{JOB}_last_session_processed_objects") == "120"
+    assert state(hass, f"sensor.{JOB}_last_session_processing_rate") == "1.0"
+    # Copy jobs get theirs too
+    copy_last = hass.states.get(f"sensor.{COPY_JOB}_last_session")
+    assert copy_last.attributes["raw_value"] == "Warning"
+
+
+async def test_later_polls_only_ask_for_what_is_new(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    first = [
+        c["end_time_lower_bound"]
+        for c in server.calls_to(JOB_SESSIONS)
+        if "end_time_lower_bound" in c
+    ]
+
+    await refresh(hass, entry)
+
+    bounds = [
+        c["end_time_lower_bound"]
+        for c in server.calls_to(JOB_SESSIONS)
+        if "end_time_lower_bound" in c
+    ]
+    assert len(bounds) == 2
+    # The first poll looks back about a day; the next only to shortly before the first
+    assert first[0] < dt_util.utcnow() - timedelta(hours=25)
+    assert bounds[1] > dt_util.utcnow() - timedelta(minutes=15)
+    # The largest pages the server allows; running sessions asked for separately
+    assert all(c["limit"] == 10000 for c in server.calls_to(JOB_SESSIONS))
+    assert sum("status" in c for c in server.calls_to(JOB_SESSIONS)) == 2
+
+
+async def test_a_session_that_finished_between_polls_is_read_by_id(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    running = job_session_json(RUNNING_SESSION, JOB_ID, 45, status="Running", duration_minutes=None)
+    server.job_sessions.append(running)
+    entry = await setup_entry(hass)
+
+    last = hass.states.get(f"sensor.{JOB}_last_session")
+    assert last.attributes["status"] == "Running"
+    # Running for 45 minutes so far
+    assert float(state(hass, f"sensor.{JOB}_last_session_duration")) == pytest.approx(45, abs=0.5)
+
+    # It finishes: no longer running, and created before the window the next poll asks for
+    running.update(
+        status="Failed", endTime=dt_util.utcnow().isoformat(), details="Mailbox not found."
+    )
+    await refresh(hass, entry)
+
+    assert server.calls_to(JOB_SESSION) == [{"job_sessions_id": RUNNING_SESSION}]
+    last = hass.states.get(f"sensor.{JOB}_last_session")
+    assert last.attributes["status"] == "Failed"
+    assert last.attributes["details"] == "Mailbox not found."
+
+
+async def test_a_new_session_replaces_the_last_one(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+    server.job_sessions.append(
+        job_session_json("5e55000a-0000-0000-0000-000000000000", JOB_ID, 1, status="Warning")
+    )
+
+    await refresh(hass, entry)
+
+    last = hass.states.get(f"sensor.{JOB}_last_session")
+    assert last.attributes["session_id"] == "5e55000a-0000-0000-0000-000000000000"
+    assert last.attributes["raw_value"] == "Warning"
+
+
+async def test_a_job_without_sessions_reads_unknown(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.job_sessions = []
+    await setup_entry(hass)
+
+    assert state(hass, f"sensor.{JOB}_last_session") == STATE_UNKNOWN
+    assert state(hass, f"sensor.{JOB}_last_session_duration") == STATE_UNKNOWN
+
+
+async def test_a_failing_sessions_endpoint_keeps_what_was_known(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides[JOB_SESSIONS] = server.error()
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"sensor.{JOB}_last_session") == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{JOB}_last_status") == "Success"
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.attributes["failed_endpoints"] == ["job_sessions"]
+
+    del server.overrides[JOB_SESSIONS]
+    await refresh(hass, entry)
+    last = hass.states.get(f"sensor.{JOB}_last_session")
+    assert last.attributes["session_id"] == "5e550002-0000-0000-0000-000000000000"
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_show_no_sessions(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    server.license = {"status": "Valid", "type": "Subscription"}
+    await setup_entry(hass, api_version=version)
+
+    assert hass.states.get(f"sensor.{JOB}_last_session") is None
+    assert server.calls_to(JOB_SESSIONS) == []

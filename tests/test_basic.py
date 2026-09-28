@@ -174,6 +174,7 @@ def test_every_translation_key_in_code_exists():
         *sensor.COPY_JOB_SENSORS,
         *sensor.REPOSITORY_SENSORS,
         *sensor.PROXY_SENSORS,
+        *sensor.JOB_SESSION_SENSORS,
         *sensor.REPOSITORY_MAINTENANCE_SENSORS,
         *sensor.ORGANIZATION_SENSORS,
         *sensor.ORGANIZATION_SYNC_SENSORS,

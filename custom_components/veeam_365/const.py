@@ -47,6 +47,12 @@ PAGE_LIMIT = 10000
 # Hard stop for pagination, in case a server keeps answering with full pages forever
 MAX_PAGES = 100
 
+# Job sessions: how far back the first poll after startup looks for each job's latest
+# session (later polls only ask for what is new), and the overlap between polls that keeps a
+# session created just as the previous poll ran from slipping through
+JOB_SESSIONS_LOOKBACK_HOURS = 26
+JOB_SESSIONS_OVERLAP_MINUTES = 10
+
 # Protected users, groups, sites and teams are counted by paging through every one of them:
 # v8 pages carry no total. So they are counted hourly, on a coordinator of their own with its
 # own time limit. A large tenant can then neither slow the regular poll nor fail it.

@@ -123,6 +123,14 @@ async def async_get_config_entry_diagnostics(
             sync_summary[result] = sync_summary.get(result, 0) + 1
         diagnostics_data["organization_sync_summary"] = sync_summary
 
+    # Job sessions (API v8), by the status of each job's latest session
+    if data.get("job_sessions"):
+        sessions_summary: dict[str, int] = {}
+        for session in data["job_sessions"].values():
+            status = session.get("status_raw") or "unknown"
+            sessions_summary[status] = sessions_summary.get(status, 0) + 1
+        diagnostics_data["job_sessions_summary"] = sessions_summary
+
     # Repository maintenance (API v8), by the status of each repository's latest session
     if data.get("repository_maintenance"):
         maintenance_summary: dict[str, int] = {}

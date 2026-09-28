@@ -185,6 +185,12 @@ class OrganizationSyncMixin(ItemStateMixin):
     state_key = "organization_sync"
 
 
+class JobSessionMixin(ItemStateMixin):
+    """A job's or copy job's latest session (API v8). None seen since startup reads unknown."""
+
+    state_key = "job_sessions"
+
+
 # What a repository that has never been under maintenance reads as
 NO_MAINTENANCE: dict[str, Any] = {
     "session_id": None,

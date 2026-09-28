@@ -217,6 +217,21 @@
       },
       "repository_maintenance_status": {
         "name": "Stan konserwacji"
+      },
+      "job_last_session": {
+        "name": "Ostatnia sesja"
+      },
+      "job_last_session_duration": {
+        "name": "Czas trwania ostatniej sesji"
+      },
+      "job_last_session_transferred": {
+        "name": "Przesłano w ostatniej sesji"
+      },
+      "job_last_session_processed_objects": {
+        "name": "Obiekty przetworzone w ostatniej sesji"
+      },
+      "job_last_session_processing_rate": {
+        "name": "Szybkość przetwarzania ostatniej sesji"
       }
     },
     "binary_sensor": {
