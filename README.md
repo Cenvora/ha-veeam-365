@@ -103,6 +103,7 @@ object it is:
 | Backup copy job | `VB365 Copy Job <copy job name>` |
 | Repository | `VB365 Repository <repository name>` |
 | Backup proxy | `VB365 Proxy <host name>` |
+| Backup proxy pool (API v8) | `VB365 Proxy Pool <pool name>` |
 | Microsoft 365 organization | `VB365 Organization <organization name>` |
 
 The kind is left out when the name already says it, so a job called "Daily Mail Job" is
@@ -150,9 +151,9 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs, job
-  sessions, repositories, repository maintenance, proxies, organizations, organization sync,
-  license, server info, health report) answers with an error; the `failed_endpoints`
-  attribute says which. This is about whether the integration's polls get answers, not about
+  sessions, repositories, repository maintenance, proxies, proxy pools, organizations,
+  organization sync, license, server info, health report) answers with an error; the
+  `failed_endpoints` attribute says which. This is about whether the integration's polls get answers, not about
   the server's own health — that is Service Health.
 - Server **Service Health** (API v8) — Problem when the server's own health report
   (`/v8/Health`) says Unhealthy. The report covers the NATS server and the PostgreSQL
@@ -165,6 +166,9 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
   installations keep its `_online` entity ID.
 - Repository **Out of Date** (API v8) and **Immutable**, and license **Auto Update Enabled**.
 - Proxy **Online** — off when the server reports the backup proxy as Offline.
+- Proxy pool **Online** (API v8) — off when none of the pool's proxies is online, so the
+  pool has nothing left to process with. Proxy pool **Degraded** — Problem while any of its
+  proxies is offline; `offline_proxies` names them.
 - Organization **Sync** (API v7 and later) — Problem when the organization's last cache
   synchronization with Microsoft 365 failed; the `error` attribute says why, and on API v8
   `parts` breaks it down into users, groups, group members and sites.
@@ -234,6 +238,12 @@ Enabled, with the untouched value as `raw_value`), CPU Usage and Memory Usage (%
 and Operating System sensors. An offline proxy reports no usage, so those read unknown until
 it is back. Maintenance mode is read-only: VB365 needs the proxy host's own administrator or
 SSH credentials to switch it, which this integration does not hold.
+
+Per **backup proxy pool** (API v8): Proxies and Online Proxies sensors, and the Online and
+Degraded binary sensors above. The server reports only a pool's name and description, so all
+of these come from the proxies that name the pool: they go unavailable while the proxies
+cannot be read, rather than counting from a stale list. The Proxies sensor lists the pool's
+proxies and the repositories it serves as attributes. A pool with no proxies reads offline.
 
 Per **Microsoft 365 organization**: Last Backup (with the first backup, the tenant's
 Microsoft name and its protected services as attributes), Licensed Users, New Users, Type

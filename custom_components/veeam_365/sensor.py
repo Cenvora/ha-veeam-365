@@ -30,11 +30,13 @@ from .coordinator import (
     reports_sync_progress,
     supports_job_sessions,
     supports_organization_sync,
+    supports_proxy_pools,
     supports_repository_maintenance,
 )
 from .entity import (
     JobSessionMixin,
     OrganizationSyncMixin,
+    ProxyPoolMixin,
     RepositoryMaintenanceMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
@@ -386,6 +388,29 @@ PROXY_SENSORS: tuple[VeeamSensorDescription, ...] = (
     ),
 )
 
+# Read from the pool's proxies (API v8)
+PROXY_POOL_SENSORS: tuple[VeeamSensorDescription, ...] = (
+    VeeamSensorDescription(
+        key="proxies",
+        translation_key="proxy_pool_proxies",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:server",
+        value_fn=lambda pool: pool.get("proxy_count"),
+        attributes_fn=lambda pool: {
+            "description": pool.get("description"),
+            "proxies": pool.get("proxies") or [],
+            "repositories": pool.get("repositories") or [],
+        },
+    ),
+    VeeamSensorDescription(
+        key="online_proxies",
+        translation_key="proxy_pool_online_proxies",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:server-network",
+        value_fn=lambda pool: pool.get("online_count"),
+    ),
+)
+
 ORGANIZATION_SENSORS: tuple[VeeamSensorDescription, ...] = (
     VeeamSensorDescription(
         key="last_backup",
@@ -623,6 +648,15 @@ async def async_setup_entry(
     async_track_items(
         coordinator, entry, "proxies", _item_sensors("proxies", PROXY_SENSORS), async_add_entities
     )
+    if supports_proxy_pools(coordinator.sdk):
+
+        def pool_sensors(item: dict[str, Any]) -> list[SensorEntity]:
+            return [
+                VeeamProxyPoolSensor(coordinator, entry, "proxy_pools", item, description)
+                for description in PROXY_POOL_SENSORS
+            ]
+
+        async_track_items(coordinator, entry, "proxy_pools", pool_sensors, async_add_entities)
 
     sync_descriptions: tuple[VeeamSensorDescription, ...] = ()
     if supports_organization_sync(coordinator.sdk):
@@ -701,7 +735,7 @@ class _DescribedSensor(SensorEntity):
 
 
 class VeeamItemSensor(VeeamItemEntity, _DescribedSensor):
-    """A sensor on a job, copy job, repository, proxy or organization device."""
+    """A sensor on a job, copy job, repository, proxy, pool or organization device."""
 
     def __init__(self, coordinator, entry, key, item, description: VeeamSensorDescription):
         self.entity_description = description
@@ -723,6 +757,10 @@ class VeeamJobSessionSensor(JobSessionMixin, VeeamItemSensor):
 
 class VeeamRepositoryMaintenanceSensor(RepositoryMaintenanceMixin, VeeamItemSensor):
     """A sensor on a repository device showing its maintenance session."""
+
+
+class VeeamProxyPoolSensor(ProxyPoolMixin, VeeamItemSensor):
+    """A sensor on a proxy pool device, counting its proxies."""
 
 
 class VeeamServerSensor(VeeamServerEntity, _DescribedSensor):

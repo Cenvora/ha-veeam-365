@@ -46,6 +46,8 @@ DEVICE_KINDS = {
     "copy_job_": "copy_jobs",
     "repository_": "repositories",
     "proxy_": "proxies",
+    # Longer than "proxy_", so _item_kind tries it first
+    "proxy_pool_": "proxy_pools",
     "organization_": "organizations",
 }
 SINGLETON_KINDS = {

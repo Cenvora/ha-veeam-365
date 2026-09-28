@@ -143,6 +143,12 @@ def proxy_json(proxy_id: str = PROXY_ID, host_name: str = "proxy01", **overrides
     return data
 
 
+def proxy_pool_json(pool_id: str = POOL_ID, name: str = "Main", **overrides) -> dict:
+    data = {"id": pool_id, "name": name, "description": "Primary proxies"}
+    data.update(overrides)
+    return data
+
+
 def organization_json(org_id: str = ORG_ID, name: str = "contoso.onmicrosoft.com", **overrides):
     data = {
         "id": org_id,
@@ -294,6 +300,7 @@ PAGE_CLASSES = {
         "PageOfRESTBackupRepository",
     ),
     "proxy.proxy_get_proxies": ("RESTProxy", "PageOfRESTProxy"),
+    "proxy_pool.proxy_pool_get_proxy_pools": ("RESTProxyPool", "PageOfRESTProxyPool"),
     "organization.organization_get": ("RestOrganizationComposed", "PageOfRestOrganizationComposed"),
     "protected_data.protected_data_get_protected_users": (
         "RESTProtectedUser",
@@ -333,6 +340,8 @@ class FakeServer:
                 object_repo_json(),
             ],
             "proxy.proxy_get_proxies": [proxy_json()],
+            # The one proxy is in this pool (see proxy_json)
+            "proxy_pool.proxy_pool_get_proxy_pools": [proxy_pool_json()],
             "organization.organization_get": [organization_json()],
             # Three users here, one in an organization that is not configured
             "protected_data.protected_data_get_protected_users": [

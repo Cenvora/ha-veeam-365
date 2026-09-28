@@ -31,10 +31,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .coordinator import (
     HEALTH_OPERATION,
     supports_organization_sync,
+    supports_proxy_pools,
     supports_repository_maintenance,
 )
 from .entity import (
     OrganizationSyncMixin,
+    ProxyPoolMixin,
     RepositoryMaintenanceMixin,
     VeeamItemEntity,
     VeeamLicenseEntity,
@@ -155,6 +157,31 @@ PROXY_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
     ),
 )
 
+# Read from the pool's proxies (API v8)
+PROXY_POOL_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
+    VeeamItemBinaryDescription(
+        key="online",
+        translation_key="proxy_pool_online",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        value_key="is_online",
+        icon_on="mdi:server-network",
+        icon_off="mdi:server-network-off",
+        attributes_fn=lambda pool: {
+            "online_proxies": pool.get("online_count"),
+            "proxies": pool.get("proxy_count"),
+        },
+    ),
+    VeeamItemBinaryDescription(
+        key="degraded",
+        translation_key="proxy_pool_degraded",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_key="is_degraded",
+        icon_on="mdi:server-network-off",
+        icon_off="mdi:server-network",
+        attributes_fn=lambda pool: {"offline_proxies": pool.get("offline_proxies") or []},
+    ),
+)
+
 # No device class: an organization without backups yet is not a fault
 ORGANIZATION_BINARY_SENSORS: tuple[VeeamItemBinaryDescription, ...] = (
     VeeamItemBinaryDescription(
@@ -231,6 +258,15 @@ async def async_setup_entry(
     async_track_items(
         coordinator, entry, "proxies", item_sensors("proxies", PROXY_BINARY_SENSORS), add
     )
+    if supports_proxy_pools(coordinator.sdk):
+
+        def pool_sensors(item: dict[str, Any]) -> list[BinarySensorEntity]:
+            return [
+                VeeamProxyPoolBinarySensor(coordinator, entry, "proxy_pools", item, description)
+                for description in PROXY_POOL_BINARY_SENSORS
+            ]
+
+        async_track_items(coordinator, entry, "proxy_pools", pool_sensors, add)
 
     sync_supported = supports_organization_sync(coordinator.sdk)
 
@@ -436,3 +472,7 @@ class VeeamOrganizationSyncBinarySensor(OrganizationSyncMixin, VeeamItemBinarySe
 
 class VeeamRepositoryMaintenanceBinarySensor(RepositoryMaintenanceMixin, VeeamItemBinarySensor):
     """On while a maintenance session suspends operations on the repository."""
+
+
+class VeeamProxyPoolBinarySensor(ProxyPoolMixin, VeeamItemBinarySensor):
+    """Whether a proxy pool can process, or has proxies offline."""

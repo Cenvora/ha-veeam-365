@@ -54,6 +54,7 @@ VERSIONED_OPERATIONS: dict[str, str] = {
     "organization_sync.organization_sync_get_state": "v7",
     "organization_sync.organization_sync_get_states": "v8",
     "organization_sync.organization_sync_start": "v7",
+    "proxy_pool.proxy_pool_get_proxy_pools": "v8",
     "protected_data.protected_data_get_protected_users": "v8",
     "protected_data.protected_data_get_protected_groups": "v8",
     "protected_data.protected_data_get_protected_sites": "v8",

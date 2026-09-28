@@ -182,6 +182,12 @@
       "proxy_operating_system": {
         "name": "Операционная система"
       },
+      "proxy_pool_proxies": {
+        "name": "Прокси"
+      },
+      "proxy_pool_online_proxies": {
+        "name": "Прокси в сети"
+      },
       "organization_last_backup": {
         "name": "Последняя резервная копия"
       },
@@ -261,6 +267,12 @@
       },
       "proxy_online": {
         "name": "В сети"
+      },
+      "proxy_pool_online": {
+        "name": "В сети"
+      },
+      "proxy_pool_degraded": {
+        "name": "Деградация"
       },
       "organization_backed_up": {
         "name": "Резервная копия создана"
