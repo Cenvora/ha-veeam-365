@@ -158,14 +158,15 @@ async def test_list_responses_of_older_versions(
 
 
 async def test_v8_collections_are_paged(hass: HomeAssistant, server: FakeServer) -> None:
-    """The server defaults to 30 per page, which truncated larger installations."""
+    """The server defaults to 30 per page, which truncated larger installations. Asking for
+    its maximum of 10,000 lists anything short of that in one request."""
     server.collections["job.job_get"] = [
         job_json(job_id=f"00000000-0000-0000-0000-{index:012d}", name=f"Job {index}")
         for index in range(250)
     ]
     entry = await setup_entry(hass)
 
-    assert [call["offset"] for call in server.calls_to("job.job_get")] == [0, 100, 200]
+    assert server.calls_to("job.job_get") == [{"limit": 10000, "offset": 0}]
     assert len(entry.runtime_data["coordinator"].data["jobs"]) == 250
 
 
@@ -670,7 +671,7 @@ async def test_proxies_get_a_device_each(hass: HomeAssistant, server: FakeServer
     assert device is not None and device.name == "VB365 Proxy proxy01"
     assert device.model == "Backup Proxy"
     # v8 pages the proxies like every other collection
-    assert server.calls_to(PROXIES) == [{"limit": 100, "offset": 0}]
+    assert server.calls_to(PROXIES) == [{"limit": 10000, "offset": 0}]
 
 
 async def test_maintenance_and_going_offline_follow_the_server(
@@ -936,8 +937,7 @@ async def test_protected_objects_are_counted_per_organization(
     assert state(hass, f"sensor.{ORG}_protected_sites") == "2"
     # Counted, and there are none: zero rather than unknown
     assert state(hass, f"sensor.{ORG}_protected_teams") == "0"
-    # In large pages, not the regular poll's 100
-    assert server.calls_to(PROTECTED_USERS) == [{"limit": 1000, "offset": 0}]
+    assert server.calls_to(PROTECTED_USERS) == [{"limit": 10000, "offset": 0}]
     assert entry.runtime_data["protected_counts"].update_interval.total_seconds() == 3600
 
 
