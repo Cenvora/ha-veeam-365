@@ -175,6 +175,9 @@
       "server_connected": {
         "name": "Připojeno"
       },
+      "service_health": {
+        "name": "Stav služeb"
+      },
       "license_auto_update": {
         "name": "Automatická aktualizace povolena"
       },

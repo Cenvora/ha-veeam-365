@@ -132,6 +132,19 @@ def license_json(**overrides) -> dict:
     return data
 
 
+def health_json(status: str = "Healthy", **checks: str) -> dict:
+    """A /Health report. Each check is given as name=status; unnamed ones default to status."""
+    descriptions = {
+        "nats": "Connection to NATS server is established.",
+        "database": "Connection to PostgreSQL configuration database is established.",
+    }
+    entries = {
+        name: {"status": checks.get(name, status), "description": description}
+        for name, description in descriptions.items()
+    }
+    return {"status": status, "entries": entries}
+
+
 PAGE_CLASSES = {
     "job.job_get": ("RESTJob", "PageOfRESTJob"),
     "copy_job.copy_job_get": ("RESTCopyJob", "PageOfRESTCopyJob"),
@@ -157,6 +170,7 @@ class FakeServer:
             ],
         }
         self.license = license_json()
+        self.health = health_json()
         # Operation name -> a result, an exception to raise, or a callable(**kwargs)
         self.overrides: dict[str, Any] = {}
         self.calls: list[tuple[str, dict]] = []
@@ -198,6 +212,8 @@ class FakeServer:
             return self.models.RESTLicense.from_dict(self.license)
         if name == "license_.license_get_auto_update":
             return self.models.RESTLicenseAutoUpdate.from_dict({"isEnabled": True})
+        if name == "health.health_get":
+            return self.models.RESTHealthReport.from_dict(self.health)
         # Actions answer 204 No Content, which the SDK returns as None
         return None
 

@@ -175,6 +175,9 @@
       "server_connected": {
         "name": "Verbonden"
       },
+      "service_health": {
+        "name": "Servicestatus"
+      },
       "license_auto_update": {
         "name": "Automatisch bijwerken ingeschakeld"
       },

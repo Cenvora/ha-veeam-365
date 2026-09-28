@@ -52,7 +52,12 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "server_info": None,
     "license_info": None,
     "repositories": [],
+    "health": None,
 }
+
+# The server's own health report (NATS and the configuration database). API v8 only; on
+# older versions it is not fetched at all rather than reported as a failing endpoint.
+HEALTH_OPERATION = "health.health_get"
 
 # Collections whose items become devices, keyed by data key
 COLLECTIONS = ("jobs", "copy_jobs", "repositories")
@@ -316,6 +321,40 @@ def parse_license(license_data: Any, auto_update: Any) -> dict[str, Any]:
     }
 
 
+def parse_health(report: Any) -> dict[str, Any]:
+    """The /Health report: an overall status, and one entry per check (nats, database)."""
+    status = text_field(report, "status")
+    entries = field(report, "entries")
+    checks: dict[str, dict[str, Any]] = {}
+    for name, entry in (getattr(entries, "additional_properties", None) or {}).items():
+        checks[str(name)] = {
+            "status": text_field(entry, "status"),
+            "description": text_field(entry, "description"),
+        }
+    return {
+        "status": humanize(status, "Unknown"),
+        "status_raw": status,
+        # None when the server sends no status, so the binary sensor reads unknown
+        "is_healthy": None if status is None else status == "Healthy",
+        "checks": checks,
+    }
+
+
+def health_report_from_error(response: Any, models: Any) -> Any | None:
+    """A health report the server sent with an error status code, if that is what it is.
+
+    Health endpoints commonly answer 503 while unhealthy. The generated client parses any
+    non-200 body as the error model, which keeps unknown keys in additional_properties —
+    so an Unhealthy report arrives as a RESTExceptionInfo carrying status and entries.
+    Reading it back keeps the sensor saying "Problem" instead of going unavailable exactly
+    when it matters.
+    """
+    body = getattr(response, "additional_properties", None) or {}
+    if "status" not in body or text_field(response, "message"):
+        return None
+    return models.RESTHealthReport.from_dict(body)
+
+
 def parse_items(
     kind: str, items: list[Any], parser: Callable[[Any], dict[str, Any] | None]
 ) -> list[dict[str, Any]]:
@@ -482,6 +521,8 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "license_info": self._fetch_license,
             "repositories": self._fetch_repositories,
         }
+        if self.sdk.has_operation(HEALTH_OPERATION):
+            fetchers["health"] = self._fetch_health
 
         data: dict[str, Any] = {}
         fetch_ok: dict[str, bool] = {}
@@ -586,3 +627,14 @@ class VeeamCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Could not fetch license auto-update: %s", describe_error(err))
 
         return parse_license(license_data, auto_update)
+
+    async def _fetch_health(self) -> dict[str, Any]:
+        response = await self.client.call(self.sdk.operation(HEALTH_OPERATION))
+        if response is None:
+            raise EndpointError("the server returned no data")
+        if is_error_response(response):
+            report = health_report_from_error(response, self.sdk.models)
+            if report is None:
+                raise EndpointError(error_message(response))
+            response = report
+        return parse_health(response)

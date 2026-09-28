@@ -26,6 +26,7 @@ from .conftest import (
     OBJECT_REPO_ID,
     REPO_ID,
     FakeServer,
+    health_json,
     job_json,
 )
 
@@ -543,3 +544,89 @@ async def test_refused_credentials_on_press_start_reauth(
         flow["context"]["source"] == SOURCE_REAUTH
         for flow in hass.config_entries.flow.async_progress()
     )
+
+
+# ---------------------------------------------------------------------------
+# The server's health report (API v8)
+# ---------------------------------------------------------------------------
+
+SERVICE_HEALTH = f"binary_sensor.{SERVER}_service_health"
+
+
+async def test_a_healthy_server_reports_ok(hass: HomeAssistant, server: FakeServer) -> None:
+    await setup_entry(hass)
+
+    health = hass.states.get(SERVICE_HEALTH)
+    assert health.state == STATE_OFF
+    assert health.attributes["raw_value"] == "Healthy"
+    assert health.attributes["problems"] == []
+    assert health.attributes["checks"]["nats"]["status"] == "Healthy"
+    assert health.attributes["checks"]["database"]["description"].startswith("Connection to")
+
+
+async def test_an_unhealthy_check_is_a_problem(hass: HomeAssistant, server: FakeServer) -> None:
+    entry = await setup_entry(hass)
+    server.health = health_json("Unhealthy", nats="Healthy")
+    server.health["entries"]["database"]["description"] = "Cannot reach PostgreSQL."
+
+    await refresh(hass, entry)
+
+    health = hass.states.get(SERVICE_HEALTH)
+    assert health.state == STATE_ON
+    assert health.attributes["raw_value"] == "Unhealthy"
+    assert health.attributes["problems"] == ["Cannot reach PostgreSQL."]
+    # The endpoint answered, so this is the server's verdict, not a failed poll
+    assert state(hass, f"binary_sensor.{SERVER}_health_ok") == STATE_ON
+
+
+async def test_an_unhealthy_report_sent_as_an_error_is_still_read(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    """A 503 carrying the report parses as the error model; it must not read as a failure."""
+    entry = await setup_entry(hass)
+    server.overrides["health.health_get"] = server.models.RESTExceptionInfo.from_dict(
+        health_json("Unhealthy", nats="Unhealthy")
+    )
+
+    await refresh(hass, entry)
+
+    health = hass.states.get(SERVICE_HEALTH)
+    assert health.state == STATE_ON
+    assert len(health.attributes["problems"]) == 2
+
+
+async def test_a_failing_health_endpoint_goes_unavailable(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides["health.health_get"] = server.error("Internal error")
+
+    await refresh(hass, entry)
+
+    assert state(hass, SERVICE_HEALTH) == STATE_UNAVAILABLE
+    assert state(hass, f"sensor.{JOB}_last_status") == "Success"
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.state == STATE_OFF
+    assert health_ok.attributes["failed_endpoints"] == ["health"]
+
+
+async def test_a_report_without_a_status_is_unknown(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.health = {"entries": {}}
+    await setup_entry(hass)
+
+    assert state(hass, SERVICE_HEALTH) == STATE_UNKNOWN
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_have_no_health_report(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    """The endpoint is v8 only: older servers get no entity and no failing endpoint."""
+    entry = await setup_entry(hass, api_version=version)
+
+    assert hass.states.get(SERVICE_HEALTH) is None
+    assert server.calls_to("health.health_get") == []
+    assert "health" not in entry.runtime_data["coordinator"].data["fetch_ok"]
+    assert state(hass, f"binary_sensor.{SERVER}_health_ok") == STATE_ON

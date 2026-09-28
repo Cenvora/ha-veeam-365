@@ -148,8 +148,13 @@ Connected/Disconnected and OK/Problem rather than `on`/`off`:
 - Server **Connected** — off while polls fail. It stays available, so it can actually say
   "Disconnected" instead of going unavailable exactly when it matters.
 - Server **Health OK** — off while polls fail *or* any endpoint (jobs, copy jobs,
-  repositories, license, server info) answers with an error; the `failed_endpoints`
-  attribute says which.
+  repositories, license, server info, health report) answers with an error; the
+  `failed_endpoints` attribute says which. This is about whether the integration's polls get
+  answers, not about the server's own health — that is Service Health.
+- Server **Service Health** (API v8) — Problem when the server's own health report
+  (`/v8/Health`) says Unhealthy. The report covers the NATS server and the PostgreSQL
+  configuration database: the `checks` attribute holds each one's status and description,
+  and `problems` lists the descriptions of the failing ones, ready for a notification.
 - Repository **Accessible** — off when the server reports the repository as Invalid (API
   v8; unknown on older versions).
 - Repository **Cache In Sync** — off when an object storage repository's local cache needs
@@ -199,7 +204,7 @@ minus free space, object storage repositories their used space) and, when immuta
 on, Immutability Days sensors; the binary sensors above; and a Synchronize Cache button.
 
 On the **server**: Product Version, Installation ID and Last Successful Poll sensors, and the
-Connected and Health OK binary sensors.
+Connected, Health OK and (API v8) Service Health binary sensors.
 
 On the **license**: Status, Type, Expiration Date, Grace Period Expiration, Licensed To,
 Total/Used/New Licenses sensors, and the Auto Update Enabled binary sensor.

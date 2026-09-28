@@ -137,6 +137,7 @@ def test_unique_ids_are_unchanged_by_the_move():
     for suffix in (
         '"server_health_ok"',
         '"server_connected"',
+        '"service_health"',
         '"license_auto_update"',
         'key="online"',
         'key="out_of_date"',

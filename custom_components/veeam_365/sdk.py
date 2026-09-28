@@ -41,6 +41,11 @@ READ_OPERATIONS = (
     "license_.license_get_auto_update",
     "backup_repository.backup_repository_get_repositories",
 )
+# Operations only some API versions have, keyed by the first version that has them. load_sdk
+# skips what a version lacks, and callers check has_operation before using one.
+VERSIONED_OPERATIONS: dict[str, str] = {
+    "health.health_get": "v8",
+}
 ACTION_OPERATIONS = (
     "job.job_start_action",
     "job.job_stop_action",
@@ -57,7 +62,7 @@ AUTH_OPERATIONS = (
     "auth.token",
     "auth.logout",
 )
-OPERATIONS = READ_OPERATIONS + ACTION_OPERATIONS
+OPERATIONS = READ_OPERATIONS + ACTION_OPERATIONS + tuple(VERSIONED_OPERATIONS)
 
 
 class VeeamSdk:
