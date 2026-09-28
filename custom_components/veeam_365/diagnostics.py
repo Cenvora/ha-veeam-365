@@ -139,6 +139,14 @@ async def async_get_config_entry_diagnostics(
             maintenance_summary[status] = maintenance_summary.get(status, 0) + 1
         diagnostics_data["repository_maintenance_summary"] = maintenance_summary
 
+    # The event feed (API v8)
+    event_feed = entry.runtime_data.get("event_feed")
+    if event_feed is not None:
+        diagnostics_data["event_feed"] = {
+            **event_feed.diagnostics(),
+            "covers_job_sessions": coordinator.event_feed_covers_job_sessions,
+        }
+
     # Protected object totals across organizations (API v8)
     protected_counts = entry.runtime_data.get("protected_counts")
     if protected_counts is not None:

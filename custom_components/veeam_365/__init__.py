@@ -32,6 +32,7 @@ from .coordinator import (
     license_issue_id,
     supports_protected_counts,
 )
+from .events import VeeamEventListener, supports_event_feed
 from .sdk import create_client, load_sdk
 
 _LOGGER = logging.getLogger(__name__)
@@ -251,9 +252,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if supports_protected_counts(sdk)
         else None
     )
+    # The event feed (v8): job changes in seconds instead of on the next poll
+    event_feed = VeeamEventListener(hass, entry, coordinator) if supports_event_feed(sdk) else None
     entry.runtime_data = {
         "coordinator": coordinator,
         "protected_counts": protected_counts,
+        "event_feed": event_feed,
         "veeam_client": veeam_client,
         # Platforms and entities read the resolved version from here rather than re-reading
         # the entry, which may only hold "auto"
@@ -275,6 +279,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(coordinator.async_add_listener(_prune))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if event_feed is not None:
+        # Runs until the entry is unloaded, which cancels it
+        entry.async_create_background_task(hass, event_feed.run(), f"{DOMAIN} event feed")
 
     if protected_counts is not None:
         # The first count can take a while on a large tenant, so setup does not wait for it;

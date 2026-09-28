@@ -39,6 +39,7 @@ from veeam_365.exceptions import VeeamAuthenticationError, VeeamError, VeeamSess
 
 from .const import (
     DOMAIN,
+    EVENTS_WAIT_SECONDS,
     JOB_SESSIONS_LOOKBACK_HOURS,
     JOB_SESSIONS_OVERLAP_MINUTES,
     MAX_PAGES,
@@ -103,6 +104,10 @@ ACTIVE_MAINTENANCE_STATUSES = frozenset(
     {"Initialized", "Preparing", "Running", "Finishing", "Canceling", "Failing"}
 )
 
+
+# How recently the event feed must have answered for job sessions to be taken from it: a
+# request it holds open, plus the time to the next one
+EVENTS_HEALTHY_SECONDS = EVENTS_WAIT_SECONDS * 2 + 30
 
 # Job sessions (v8). Every version lists them, but only v8 says which job a session belongs
 # to and filters by status, which is what makes finding each job's latest session cheap.
@@ -835,6 +840,13 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         self._job_sessions_since: Any = None
         # Parsed from the last server info that could be read (see server_version)
         self._server_version: tuple[int, ...] | None = None
+        # The event feed (events.py), as far as job sessions are concerned: sessions it said
+        # changed, when it last answered, when it last started from the latest token, and
+        # when the last full listing of job sessions began
+        self._changed_sessions: set[str] = set()
+        self._feed_ok_at: Any = None
+        self._feed_started_at: Any = None
+        self._sessions_listed_at: Any = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -879,6 +891,39 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         Some endpoints of one API version are only served from a given product version on.
         """
         return self._server_version
+
+    # -- the event feed (see events.py) --------------------------------------
+
+    def event_feed_started(self) -> None:
+        """The feed started over from the latest token; what came before it is not in it."""
+        self._feed_started_at = dt_util.utcnow()
+        self._feed_ok_at = self._feed_started_at
+
+    def event_feed_ok(self) -> None:
+        self._feed_ok_at = dt_util.utcnow()
+
+    def event_feed_failed(self) -> None:
+        self._feed_ok_at = None
+
+    def job_sessions_changed(self, session_ids: set[str]) -> None:
+        """Sessions the feed reported, for the next poll to read by ID."""
+        self._changed_sessions |= session_ids
+
+    @property
+    def event_feed_covers_job_sessions(self) -> bool:
+        """Whether the next poll can take the changed sessions from the feed, not a listing.
+
+        Only while the feed is answering, and once a full listing has run since it last
+        started over: that listing covers everything from before the feed's first token.
+        """
+        if self._feed_ok_at is None or self._feed_started_at is None:
+            return False
+        if dt_util.utcnow() - self._feed_ok_at > timedelta(seconds=EVENTS_HEALTHY_SECONDS):
+            return False
+        return (
+            self._sessions_listed_at is not None
+            and self._sessions_listed_at >= self._feed_started_at
+        )
 
     def _update_license_issue(self, data: dict[str, Any]) -> None:
         """Re-evaluate the unsupported-license repair when the answer changes."""
@@ -1048,40 +1093,54 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
     async def _fetch_job_sessions(self) -> dict[str, dict[str, Any]]:
         """Each job's and copy job's latest session, by job ID.
 
-        Which sessions changed is found without paging through history on every poll:
-        the running ones, plus those since the last poll (the first poll after startup looks
-        back a day). endTimeLowerBound is documented as filtering on creation time; asking
-        for the running sessions separately covers it filtering on the end time instead. A
-        session last seen running that neither list returns has finished between two polls,
-        so it is read by ID for its outcome.
+        Which sessions changed is found without paging through history on every poll. While
+        the event feed covers it (see event_feed_covers_job_sessions), the feed names them.
+        Otherwise they are listed: the running ones, plus those since the last listing (the
+        first after startup looks back a day). endTimeLowerBound is documented as filtering
+        on creation time; asking for the running sessions separately covers it filtering on
+        the end time instead. Either way, every session last seen running is read by ID too,
+        which keeps its figures current and catches one that finished between two polls.
         """
+        # Taken now, so sessions the feed reports while this poll runs are for the next one;
+        # handed back if the poll fails, so none is lost
+        to_read, self._changed_sessions = self._changed_sessions, set()
+        try:
+            return await self._read_job_sessions(to_read)
+        except BaseException:
+            self._changed_sessions |= to_read
+            raise
+
+    async def _read_job_sessions(self, to_read: set[str]) -> dict[str, dict[str, Any]]:
         started = dt_util.utcnow()
-        since = self._job_sessions_since or started - timedelta(hours=JOB_SESSIONS_LOOKBACK_HOURS)
-        since -= timedelta(minutes=JOB_SESSIONS_OVERLAP_MINUTES)
-        running_filter = self.sdk.models.JobSessionGetStatus.RUNNING
-
         seen: dict[str, dict[str, Any]] = {}
-        for kwargs in ({"status": running_filter}, {"end_time_lower_bound": since}):
-            items = await self._fetch_collection(JOB_SESSIONS_OPERATION, **kwargs)
-            for session in parse_items(
-                "job sessions", items, lambda item: parse_job_session(item, started)
-            ):
-                seen[session["session_id"]] = session
 
-        for known in list(self._job_sessions.values()):
-            if not known["is_running"] or known["session_id"] in seen:
-                continue
+        if not self.event_feed_covers_job_sessions:
+            since = self._job_sessions_since or started - timedelta(
+                hours=JOB_SESSIONS_LOOKBACK_HOURS
+            )
+            since -= timedelta(minutes=JOB_SESSIONS_OVERLAP_MINUTES)
+            running_filter = self.sdk.models.JobSessionGetStatus.RUNNING
+            for kwargs in ({"status": running_filter}, {"end_time_lower_bound": since}):
+                items = await self._fetch_collection(JOB_SESSIONS_OPERATION, **kwargs)
+                for session in parse_items(
+                    "job sessions", items, lambda item: parse_job_session(item, started)
+                ):
+                    seen[session["session_id"]] = session
+            self._sessions_listed_at = started
+
+        # Read by ID: what the feed said changed, and every session last seen running
+        to_read = to_read | {
+            s["session_id"] for s in self._job_sessions.values() if s["is_running"]
+        }
+        for session_id in sorted(to_read - set(seen)):
             try:
                 session = parse_job_session(
-                    await self._call(JOB_SESSION_OPERATION, job_sessions_id=known["session_id"]),
-                    started,
+                    await self._call(JOB_SESSION_OPERATION, job_sessions_id=session_id), started
                 )
             except (VeeamAuthenticationError, VeeamSessionError):
                 raise
             except (EndpointError, VeeamError, *PARSE_ERRORS) as err:
-                _LOGGER.debug(
-                    "Could not re-read job session %s: %s", known["session_id"], describe_error(err)
-                )
+                _LOGGER.debug("Could not read job session %s: %s", session_id, describe_error(err))
                 continue
             if session is not None:
                 seen[session["session_id"]] = session

@@ -53,6 +53,15 @@ MAX_PAGES = 100
 JOB_SESSIONS_LOOKBACK_HOURS = 26
 JOB_SESSIONS_OVERLAP_MINUTES = 10
 
+# The event feed (API v8, see events.py): how long the server is asked to hold each request
+# open waiting for events — under REQUEST_TIMEOUT, which bounds every request — and how long
+# to wait before trying again after it fails, doubling from the first to the second
+EVENTS_WAIT_SECONDS = 25
+EVENTS_RETRY_MIN_SECONDS = 30
+EVENTS_RETRY_MAX_SECONDS = 300
+# Fired on the Home Assistant bus when a job session's status changes
+EVENT_JOB_SESSION = "veeam_365_job_session"
+
 # Protected users, groups, sites and teams are counted by paging through every one of them:
 # v8 pages carry no total. So they are counted hourly, on a coordinator of their own with its
 # own time limit. A large tenant can then neither slow the regular poll nor fail it.

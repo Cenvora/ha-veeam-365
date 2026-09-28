@@ -256,6 +256,37 @@ Connected, Health OK and (API v8) Service Health binary sensors.
 On the **license**: Status, Type, Expiration Date, Grace Period Expiration, Licensed To,
 Total/Used/New Licenses sensors, and the Auto Update Enabled binary sensor.
 
+## Live updates (API v8)
+
+On API v8 the integration also follows VB365's event feed (`/v8/Events`), a request the
+server holds open until something changes. Whenever a job or one of its sessions changes,
+the entities are refreshed within seconds instead of on the next minute's poll, and the
+session that changed is read directly rather than searched for.
+
+When a job session's status changes, a `veeam_365_job_session` event is also fired on the
+Home Assistant event bus, so an automation can react to it without watching a sensor:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: veeam_365_job_session
+    event_data:
+      status: Failed
+actions:
+  - action: notify.notify
+    data:
+      message: "VB365 job {{ trigger.event.data.job_name }} failed"
+```
+
+The event carries `entry_id`, `job_id`, `job_name`, `job_type` (Backup or Copy),
+`session_id` and `status` (Running, Success, Warning, Failed, Stopped or NotConfigured).
+
+The feed only speeds things up; the regular poll carries on regardless. If the feed fails
+or the server does not have it, a warning is logged once, the integration retries with
+increasing pauses (up to five minutes), and meanwhile everything updates on the poll as
+before. Changes made while Home Assistant was not listening are picked up by the next poll.
+The feed's state is in the integration's diagnostics.
+
 ## Automation Blueprints
 
 Ready-made automations for the entities this integration creates. Each one asks you to pick
