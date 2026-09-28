@@ -141,6 +141,6 @@ def device_name(kind: str, name: str | None = None) -> str:
     """
     if not name:
         return f"{DEVICE_NAME_PREFIX} {kind}"
-    if kind.lower() in name.lower():
+    if re.search(rf"\b{re.escape(kind)}\b", name, re.IGNORECASE):
         return f"{DEVICE_NAME_PREFIX} {name}"
     return f"{DEVICE_NAME_PREFIX} {kind} {name}"

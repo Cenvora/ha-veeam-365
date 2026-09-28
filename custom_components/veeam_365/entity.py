@@ -39,7 +39,8 @@ def server_device_info(entry: ConfigEntry) -> DeviceInfo:
 def license_device_info(entry: ConfigEntry) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, f"license_{entry.entry_id}")},
-        name=device_name("License"),
+        # With the host, like the server device, so two entries' licenses stay apart
+        name=device_name("License", str(entry.data.get(CONF_HOST, "")) or None),
         manufacturer=MANUFACTURER,
         model="License",
     )

@@ -34,7 +34,7 @@ COPY_JOB = "vb365_copy_job_mail_copy"
 LOCAL_REPO = "vb365_default_backup_repository"
 OBJECT_REPO = "vb365_repository_s3_archive"
 SERVER = "vb365_server_veeam_example_com"
-LICENSE = "vb365_license"
+LICENSE = "vb365_license_veeam_example_com"
 
 
 async def setup_entry(hass: HomeAssistant, **data) -> MockConfigEntry:

@@ -98,7 +98,7 @@ object it is:
 | Device | Name |
 | --- | --- |
 | Server | `VB365 Server <host>` |
-| License | `VB365 License` |
+| License | `VB365 License <host>` |
 | Backup job | `VB365 Job <job name>` |
 | Backup copy job | `VB365 Copy Job <copy job name>` |
 | Repository | `VB365 Repository <repository name>` |
