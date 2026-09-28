@@ -49,6 +49,7 @@ async def async_get_config_entry_diagnostics(
             "copy_jobs_count": len(data.get("copy_jobs", [])),
             "repositories_count": len(data.get("repositories", [])),
             "proxies_count": len(data.get("proxies", [])),
+            "proxy_pools_count": len(data.get("proxy_pools", [])),
             "organizations_count": len(data.get("organizations", [])),
             "has_server_info": data.get("server_info") is not None,
             "has_license_info": data.get("license_info") is not None,

@@ -182,6 +182,12 @@
       "proxy_operating_system": {
         "name": "Betriebssystem"
       },
+      "proxy_pool_proxies": {
+        "name": "Proxys"
+      },
+      "proxy_pool_online_proxies": {
+        "name": "Proxys online"
+      },
       "organization_last_backup": {
         "name": "Letzte Sicherung"
       },
@@ -261,6 +267,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "proxy_pool_online": {
+        "name": "Online"
+      },
+      "proxy_pool_degraded": {
+        "name": "Beeinträchtigt"
       },
       "organization_backed_up": {
         "name": "Gesichert"

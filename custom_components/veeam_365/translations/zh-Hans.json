@@ -182,6 +182,12 @@
       "proxy_operating_system": {
         "name": "操作系统"
       },
+      "proxy_pool_proxies": {
+        "name": "代理"
+      },
+      "proxy_pool_online_proxies": {
+        "name": "在线代理"
+      },
       "organization_last_backup": {
         "name": "上次备份"
       },
@@ -261,6 +267,12 @@
       },
       "proxy_online": {
         "name": "在线"
+      },
+      "proxy_pool_online": {
+        "name": "在线"
+      },
+      "proxy_pool_degraded": {
+        "name": "降级"
       },
       "organization_backed_up": {
         "name": "已备份"

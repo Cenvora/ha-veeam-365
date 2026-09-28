@@ -182,6 +182,12 @@
       "proxy_operating_system": {
         "name": "Operační systém"
       },
+      "proxy_pool_proxies": {
+        "name": "Proxy"
+      },
+      "proxy_pool_online_proxies": {
+        "name": "Proxy online"
+      },
       "organization_last_backup": {
         "name": "Poslední záloha"
       },
@@ -261,6 +267,12 @@
       },
       "proxy_online": {
         "name": "Online"
+      },
+      "proxy_pool_online": {
+        "name": "Online"
+      },
+      "proxy_pool_degraded": {
+        "name": "Degradováno"
       },
       "organization_backed_up": {
         "name": "Zálohováno"

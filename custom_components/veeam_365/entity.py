@@ -13,7 +13,13 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, device_name
-from .coordinator import VeeamCoordinator, current_ids, fetch_succeeded, is_prunable
+from .coordinator import (
+    VeeamCoordinator,
+    current_ids,
+    fetch_succeeded,
+    is_prunable,
+    proxy_pool_status,
+)
 
 MANUFACTURER = "Veeam"
 
@@ -25,6 +31,7 @@ ITEM_KINDS: dict[str, tuple[str, str, str]] = {
     "copy_jobs": ("copy_job", "Copy Job", "Backup Copy Job"),
     "repositories": ("repository", "Repository", "Backup Repository"),
     "proxies": ("proxy", "Proxy", "Backup Proxy"),
+    "proxy_pools": ("proxy_pool", "Proxy Pool", "Backup Proxy Pool"),
     "organizations": ("organization", "Organization", "Microsoft 365 Organization"),
 }
 
@@ -122,7 +129,7 @@ class VeeamLicenseEntity(VeeamEntity):
 
 
 class VeeamItemEntity(VeeamEntity):
-    """An entity on the device of one job, copy job, repository, proxy or organization."""
+    """An entity on the device of one job, copy job, repository, proxy, pool or organization."""
 
     def __init__(
         self,
@@ -176,6 +183,30 @@ class ItemStateMixin:
     def available(self) -> bool:
         return super().available and fetch_succeeded(  # type: ignore[misc]
             self.coordinator.data, self.state_key
+        )
+
+
+class ProxyPoolMixin:
+    """For an entity on a proxy pool's device (API v8).
+
+    A pool reports only its name, so what these show comes from its proxies: unavailable while
+    the proxies could not be fetched, rather than counting from a stale list.
+    """
+
+    coordinator: VeeamCoordinator
+    item: dict[str, Any] | None
+
+    def _source(self) -> dict[str, Any] | None:
+        pool = self.item
+        if pool is None:
+            return None
+        data = self.coordinator.data or {}
+        return proxy_pool_status(pool, data.get("proxies") or [], data.get("repositories") or [])
+
+    @property
+    def available(self) -> bool:
+        return super().available and fetch_succeeded(  # type: ignore[misc]
+            self.coordinator.data, "proxies"
         )
 
 

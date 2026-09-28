@@ -28,16 +28,20 @@ from .conftest import (
     OBJECT_REPO_ID,
     ORG_ID,
     OTHER_ORG_ID,
+    POOL_ID,
     PROXY_ID,
     REPO_ID,
     FakeServer,
     health_json,
     job_json,
     job_session_json,
+    local_repo_json,
     maintenance_json,
+    object_repo_json,
     organization_json,
     protected_json,
     proxy_json,
+    proxy_pool_json,
     sync_state_json,
 )
 
@@ -754,6 +758,167 @@ async def test_a_removed_proxy_is_pruned(hass: HomeAssistant, server: FakeServer
     assert _device(hass, f"proxy_{second}") is None
     assert hass.states.get("binary_sensor.vb365_proxy_proxy02_online") is None
     assert _device(hass, f"proxy_{PROXY_ID}") is not None
+
+
+# ---------------------------------------------------------------------------
+# Proxy pools (v8)
+# ---------------------------------------------------------------------------
+
+POOL = "vb365_proxy_pool_main"
+POOLS = "proxy_pool.proxy_pool_get_proxy_pools"
+SECOND_PROXY_ID = "88888888-8888-8888-8888-888888888888"
+
+
+async def test_proxy_pools_get_a_device_each(hass: HomeAssistant, server: FakeServer) -> None:
+    server.collections["backup_repository.backup_repository_get_repositories"] = [
+        local_repo_json(proxyPoolId=POOL_ID),
+        object_repo_json(),
+    ]
+    entry = await setup_entry(hass)
+
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_ON
+    assert state(hass, f"binary_sensor.{POOL}_degraded") == STATE_OFF
+    assert state(hass, f"sensor.{POOL}_online_proxies") == "1"
+    proxies = hass.states.get(f"sensor.{POOL}_proxies")
+    assert proxies.state == "1"
+    assert proxies.attributes["proxies"] == ["proxy01"]
+    assert proxies.attributes["description"] == "Primary proxies"
+    assert proxies.attributes["repositories"] == ["Default Backup Repository"]
+
+    device = _device(hass, f"proxy_pool_{POOL_ID}")
+    assert device is not None and device.name == "VB365 Proxy Pool Main"
+    assert device.model == "Backup Proxy Pool"
+    assert server.calls_to(POOLS) == [{"limit": 10000, "offset": 0}]
+    assert (
+        er.async_get(hass).async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_proxy_pool_{POOL_ID}_proxies"
+        )
+        == f"sensor.{POOL}_proxies"
+    )
+
+
+async def test_a_pool_follows_its_proxies(hass: HomeAssistant, server: FakeServer) -> None:
+    server.collections[PROXIES] = [proxy_json(), proxy_json(SECOND_PROXY_ID, "proxy02")]
+    entry = await setup_entry(hass)
+    assert state(hass, f"sensor.{POOL}_online_proxies") == "2"
+
+    # One proxy down: the pool still processes, but is degraded
+    server.collections[PROXIES] = [
+        proxy_json(),
+        proxy_json(SECOND_PROXY_ID, "proxy02", status="Offline"),
+    ]
+    await refresh(hass, entry)
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_ON
+    degraded = hass.states.get(f"binary_sensor.{POOL}_degraded")
+    assert degraded.state == STATE_ON
+    assert degraded.attributes["offline_proxies"] == ["proxy02"]
+    assert state(hass, f"sensor.{POOL}_online_proxies") == "1"
+
+    # Both down: nothing left to process with
+    server.collections[PROXIES] = [
+        proxy_json(status="Offline"),
+        proxy_json(SECOND_PROXY_ID, "proxy02", status="Offline"),
+    ]
+    await refresh(hass, entry)
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_OFF
+    assert state(hass, f"sensor.{POOL}_online_proxies") == "0"
+
+    # Taken out of the pool, an offline proxy is no longer the pool's problem
+    server.collections[PROXIES] = [
+        proxy_json(),
+        proxy_json(SECOND_PROXY_ID, "proxy02", status="Offline", proxyPoolId=None),
+    ]
+    await refresh(hass, entry)
+    assert state(hass, f"sensor.{POOL}_proxies") == "1"
+    assert state(hass, f"binary_sensor.{POOL}_degraded") == STATE_OFF
+
+
+async def test_a_pool_without_proxies_reads_offline(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.collections[PROXIES] = [proxy_json(proxyPoolId=None)]
+    await setup_entry(hass)
+
+    assert state(hass, f"sensor.{POOL}_proxies") == "0"
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_OFF
+    assert state(hass, f"binary_sensor.{POOL}_degraded") == STATE_OFF
+
+
+async def test_a_proxy_without_a_status_leaves_the_pool_unknown(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    """Unless another proxy already settles it."""
+    silent = {"id": SECOND_PROXY_ID, "hostName": "proxy02", "proxyPoolId": POOL_ID}
+    server.collections[PROXIES] = [proxy_json(), silent]
+    entry = await setup_entry(hass)
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_ON
+    assert state(hass, f"binary_sensor.{POOL}_degraded") == STATE_UNKNOWN
+
+    server.collections[PROXIES] = [proxy_json(status="Offline"), silent]
+    await refresh(hass, entry)
+    assert state(hass, f"binary_sensor.{POOL}_online") == STATE_UNKNOWN
+    assert state(hass, f"binary_sensor.{POOL}_degraded") == STATE_ON
+
+
+async def test_pool_entities_are_unavailable_while_proxies_cannot_be_read(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides[PROXIES] = server.error("Insufficient permissions")
+
+    await refresh(hass, entry)
+
+    for entity_id in (
+        f"binary_sensor.{POOL}_online",
+        f"binary_sensor.{POOL}_degraded",
+        f"sensor.{POOL}_proxies",
+        f"sensor.{POOL}_online_proxies",
+    ):
+        assert state(hass, entity_id) == STATE_UNAVAILABLE, entity_id
+    assert _device(hass, f"proxy_pool_{POOL_ID}") is not None
+
+
+async def test_a_failing_pools_endpoint_only_affects_pools(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    entry = await setup_entry(hass)
+    server.overrides[POOLS] = server.error("Insufficient permissions")
+
+    await refresh(hass, entry)
+
+    assert state(hass, f"sensor.{POOL}_proxies") == STATE_UNAVAILABLE
+    assert state(hass, f"binary_sensor.{PROXY}_online") == STATE_ON
+    assert _device(hass, f"proxy_pool_{POOL_ID}") is not None, "a failed fetch prunes nothing"
+    health_ok = hass.states.get(f"binary_sensor.{SERVER}_health_ok")
+    assert health_ok.attributes["failed_endpoints"] == ["proxy_pools"]
+
+
+async def test_a_removed_pool_is_pruned(hass: HomeAssistant, server: FakeServer) -> None:
+    second = "abababab-abab-abab-abab-abababababab"
+    server.collections[POOLS] = [proxy_pool_json(), proxy_pool_json(second, "Spare")]
+    entry = await setup_entry(hass)
+    assert _device(hass, f"proxy_pool_{second}") is not None
+
+    server.collections[POOLS] = [proxy_pool_json()]
+    await refresh(hass, entry)
+
+    assert _device(hass, f"proxy_pool_{second}") is None
+    assert hass.states.get("sensor.vb365_proxy_pool_spare_proxies") is None
+    assert _device(hass, f"proxy_pool_{POOL_ID}") is not None
+    # A pool is not mistaken for a proxy, nor a proxy for a pool
+    assert _device(hass, f"proxy_{PROXY_ID}") is not None
+
+
+@pytest.mark.parametrize("version", ["6", "7"])
+async def test_older_versions_have_no_proxy_pools(
+    hass: HomeAssistant, server: FakeServer, version: str
+) -> None:
+    entry = await setup_entry(hass, api_version=version)
+
+    assert _device(hass, f"proxy_pool_{POOL_ID}") is None
+    assert hass.states.get(f"sensor.{POOL}_proxies") is None
+    assert server.calls_to(POOLS) == []
+    assert "proxy_pools" not in entry.runtime_data["coordinator"].data["fetch_ok"]
 
 
 # ---------------------------------------------------------------------------

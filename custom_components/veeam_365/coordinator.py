@@ -64,6 +64,7 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
     "license_info": None,
     "repositories": [],
     "proxies": [],
+    "proxy_pools": [],
     "organizations": [],
     "organization_sync": {},
     "repository_maintenance": {},
@@ -76,6 +77,10 @@ ENDPOINT_DEFAULTS: dict[str, Any] = {
 HEALTH_OPERATION = "health.health_get"
 
 ORGANIZATIONS_OPERATION = "organization.organization_get"
+
+# Backup proxy pools (v8). A pool reports only its name and description; which proxies are
+# in it, and so how it is doing, comes from each proxy's proxyPoolId.
+PROXY_POOLS_OPERATION = "proxy_pool.proxy_pool_get_proxy_pools"
 
 # Organization cache synchronization state: every organization in one call from v8, one
 # call per organization on v7, not at all on v6
@@ -153,6 +158,11 @@ def supports_protected_counts(sdk: VeeamSdk) -> bool:
     return all(sdk.has_operation(operation) for operation in PROTECTED_OPERATIONS.values())
 
 
+def supports_proxy_pools(sdk: VeeamSdk) -> bool:
+    """Whether this API version has proxy pools at all (v8)."""
+    return sdk.has_operation(PROXY_POOLS_OPERATION)
+
+
 def supports_organization_sync(sdk: VeeamSdk) -> bool:
     """Whether this API version reports organization sync state at all (v7 and later)."""
     return sdk.has_operation(SYNC_STATES_OPERATION) or sdk.has_operation(SYNC_STATE_OPERATION)
@@ -164,7 +174,7 @@ def reports_sync_progress(sdk: VeeamSdk) -> bool:
 
 
 # Collections whose items become devices, keyed by data key
-COLLECTIONS = ("jobs", "copy_jobs", "repositories", "proxies", "organizations")
+COLLECTIONS = ("jobs", "copy_jobs", "repositories", "proxies", "proxy_pools", "organizations")
 
 # Errors that mean the server could not be reached or did not answer in time
 TRANSPORT_ERRORS = (httpx.HTTPError, OSError, TimeoutError)
@@ -396,6 +406,8 @@ def parse_repository(repo: Any) -> dict[str, Any] | None:
         # the Invalid state.
         "is_cache_in_sync": None if is_out_of_sync is None else not is_out_of_sync,
         "is_accessible": None if is_out_of_order is None else not is_out_of_order,
+        # The pool whose proxies serve it (v8), if any
+        "proxy_pool_id": id_field(repo, "proxy_pool_id"),
     }
 
 
@@ -438,6 +450,49 @@ def parse_proxy(proxy: Any) -> dict[str, Any] | None:
         "operating_system_raw": operating_system,
         "proxy_pool_id": id_field(proxy, "proxy_pool_id"),
         "roles": [str(clean(role)) for role in roles if not is_missing(role)],
+    }
+
+
+def parse_proxy_pool(pool: Any) -> dict[str, Any] | None:
+    pool_id = id_field(pool)
+    if pool_id is None:
+        return None
+    return {
+        "id": pool_id,
+        "name": text_field(pool, "name", "Unknown Proxy Pool"),
+        "description": text_field(pool, "description", ""),
+    }
+
+
+def proxy_pool_status(
+    pool: dict[str, Any], proxies: list[dict[str, Any]], repositories: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """A pool with what its proxies report, and the repositories it serves.
+
+    Online while any of its proxies is; degraded while any is offline. A proxy whose status is
+    not reported makes either unknown rather than a guess, unless another proxy already
+    settles it. A pool with no proxies can process nothing, so it reads offline.
+    """
+    members = sorted(
+        (proxy for proxy in proxies if proxy.get("proxy_pool_id") == pool["id"]),
+        key=lambda proxy: str(proxy.get("name")),
+    )
+    online = [proxy["name"] for proxy in members if proxy.get("is_online") is True]
+    offline = [proxy["name"] for proxy in members if proxy.get("is_online") is False]
+    unknown = len(members) - len(online) - len(offline)
+    return {
+        **pool,
+        "proxy_count": len(members),
+        "online_count": len(online),
+        "proxies": [proxy["name"] for proxy in members],
+        "offline_proxies": offline,
+        "is_online": True if online else (None if unknown else False),
+        "is_degraded": True if offline else (None if unknown else False),
+        "repositories": sorted(
+            str(repo.get("name"))
+            for repo in repositories
+            if repo.get("proxy_pool_id") == pool["id"]
+        ),
     }
 
 
@@ -949,6 +1004,8 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
             "proxies": self._fetch_proxies,
             "organizations": self._fetch_organizations,
         }
+        if supports_proxy_pools(self.sdk):
+            fetchers["proxy_pools"] = self._fetch_proxy_pools
         if supports_organization_sync(self.sdk):
             # After the organizations, whose IDs v7 needs: this runs once data holds them
             # (freshly fetched, or the last known ones if that fetch failed)
@@ -1022,6 +1079,11 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
     async def _fetch_proxies(self) -> list[dict[str, Any]]:
         return parse_items(
             "proxies", await self._fetch_collection("proxy.proxy_get_proxies"), parse_proxy
+        )
+
+    async def _fetch_proxy_pools(self) -> list[dict[str, Any]]:
+        return parse_items(
+            "proxy pools", await self._fetch_collection(PROXY_POOLS_OPERATION), parse_proxy_pool
         )
 
     async def _fetch_organizations(self) -> list[dict[str, Any]]:
