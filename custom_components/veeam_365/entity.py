@@ -138,7 +138,7 @@ class VeeamItemEntity(VeeamEntity):
         key: str,
         item: dict[str, Any],
         suffix: str,
-        translation_key: str,
+        translation_key: str | None,
     ) -> None:
         prefix = ITEM_KINDS[key][0]
         self.endpoint = key
