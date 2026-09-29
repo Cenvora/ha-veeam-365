@@ -4,7 +4,7 @@ import logging
 import re
 
 DOMAIN = "veeam_365"
-DEFAULT_NAME = "Veeam Backup for Microsoft 365"
+DEFAULT_NAME = "Veeam Backup for M365"
 
 # Every device this integration creates is named with this prefix. Entities use
 # has_entity_name, so their entity IDs start with the device name — without a prefix of its

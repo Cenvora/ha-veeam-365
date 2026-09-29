@@ -1,6 +1,6 @@
 {
   "domain": "veeam_365",
-  "name": "Veeam Backup for Microsoft 365",
+  "name": "Veeam Backup for M365",
   "codeowners": [
     "@Cenvora"
   ],
