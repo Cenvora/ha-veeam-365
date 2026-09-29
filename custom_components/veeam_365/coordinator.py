@@ -1300,8 +1300,7 @@ class VeeamProtectedCountsCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[st
                     return await self._count_all()
         except TimeoutError as err:
             raise UpdateFailed(
-                f"Counting protected objects took longer than {PROTECTED_COUNT_TIMEOUT:.0f} "
-                "seconds"
+                f"Counting protected objects took longer than {PROTECTED_COUNT_TIMEOUT:.0f} seconds"
             ) from err
         # Refused credentials are the regular poll's to report (it starts reauth); here
         # they are one more reason the counts could not be refreshed

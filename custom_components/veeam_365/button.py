@@ -125,13 +125,11 @@ REPOSITORY_MAINTENANCE_BUTTONS = (
         id_param=None,
         failure_key="repository_start_maintenance_failed",
         name_placeholder="repository_name",
-        body_fn=lambda models, repo_id: (
-            models.RESTBackupRepositoryMaintenanceSessionStartRequest(
-                repository_ids=[repo_id],
-                waiting_config=models.RESTBackupRepositoryMaintenanceSessionWaitingConfig(
-                    wait_for_sessions_timeout=60, force_stop_sessions=False
-                ),
-            )
+        body_fn=lambda models, repo_id: models.RESTBackupRepositoryMaintenanceSessionStartRequest(
+            repository_ids=[repo_id],
+            waiting_config=models.RESTBackupRepositoryMaintenanceSessionWaitingConfig(
+                wait_for_sessions_timeout=60, force_stop_sessions=False
+            ),
         ),
     ),
     VeeamButtonDescription(
