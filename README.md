@@ -1,6 +1,6 @@
 <h1 align="center">
 <br>
-<img src="https://raw.githubusercontent.com/Cenvora/ha-veeam-365/main/media/Veeam_logo_2024_RGB_main_20.png"
+<img src="https://raw.githubusercontent.com/Cenvora/ha-veeam-365/main/custom_components/veeam_365/brand/logo.png"
      alt="Veeam Logo"
      height="100">
 <br>
