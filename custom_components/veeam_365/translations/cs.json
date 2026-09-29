@@ -380,5 +380,12 @@
       "title": "Licence Veeam na {host} vypršela",
       "description": "Licence Veeam Backup for Microsoft 365 na **{host}** vypršela {date}. Úlohy zálohování přestaly zpracovávat nová data, nebo přestanou, jakmile uplyne případná doba odkladu, kterou váš typ licence umožňuje.\n\nNainstalujte obnovenou licenci v konzoli Veeam Backup for Microsoft 365. Toto upozornění zmizí samo, jakmile server nahlásí novou licenci."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automaticky"
+      }
+    }
   }
 }

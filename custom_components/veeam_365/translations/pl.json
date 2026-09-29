@@ -380,5 +380,12 @@
       "title": "Licencja Veeam na {host} wygasła",
       "description": "Licencja Veeam Backup for Microsoft 365 na **{host}** wygasła {date}. Zadania kopii zapasowych przestały przetwarzać nowe dane lub przestaną, gdy skończy się ewentualny okres karencji przewidziany dla Twojego typu licencji.\n\nZainstaluj odnowioną licencję w konsoli Veeam Backup for Microsoft 365. To ostrzeżenie zniknie samo, gdy serwer zgłosi nową licencję."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automatycznie"
+      }
+    }
   }
 }

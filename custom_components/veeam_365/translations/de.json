@@ -380,5 +380,12 @@
       "title": "Veeam-Lizenz auf {host} ist abgelaufen",
       "description": "Die Veeam Backup for Microsoft 365-Lizenz auf **{host}** ist am {date} abgelaufen. Sicherungsjobs verarbeiten keine neuen Daten mehr oder hören damit auf, sobald eine eventuelle Kulanzfrist deines Lizenztyps endet.\n\nInstalliere eine verlängerte Lizenz in der Veeam Backup for Microsoft 365-Konsole. Diese Warnung verschwindet von selbst, sobald die neue Lizenz gemeldet wird."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automatisch"
+      }
+    }
   }
 }

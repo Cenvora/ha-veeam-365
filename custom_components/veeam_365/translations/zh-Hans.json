@@ -380,5 +380,12 @@
       "title": "{host} 上的 Veeam 许可证已到期",
       "description": "**{host}** 上的 Veeam Backup for Microsoft 365 许可证已于 {date} 到期。备份作业已停止处理新数据，或将在您的许可证类型允许的宽限期结束后停止。\n\n请在 Veeam Backup for Microsoft 365 控制台中安装续订的许可证。服务器报告新许可证后，此警告会自动清除。"
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "自动"
+      }
+    }
   }
 }
