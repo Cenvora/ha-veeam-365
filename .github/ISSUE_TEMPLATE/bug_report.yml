@@ -1,0 +1,144 @@
+name: Bug report
+description: Something is not working — missing entities, errors in the log, failed setup
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        Most reports come down to a handful of things: which Veeam Backup for Microsoft 365 build you run,
+        which REST API version the integration is using, and what your license entitles. The
+        fields below ask for exactly those, so please fill them in — it is usually the
+        difference between a same-day fix and a long back-and-forth.
+
+        **The fastest thing you can attach is a diagnostics download**: Settings → Devices &
+        Services → Veeam Backup for M365 → ⋮ → *Download diagnostics*. It contains the API version and
+        your license and server details, with no credentials.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: "What you expected, and what happened instead."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add the integration
+        2. …
+    validations:
+      required: false
+
+  - type: input
+    id: product-version
+    attributes:
+      label: Veeam Backup for Microsoft 365 version
+      description: "Full build number. Help → About in the Veeam Backup for Microsoft 365 console."
+      placeholder: "8.x.x.xxx"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: license
+    attributes:
+      label: Veeam license type
+      description: |
+        Shown in the console, or on the integration's License device.
+        Community Edition is not supported (the integration raises a repair warning for it),
+        but please still report what you see.
+      options:
+        - "Subscription"
+        - "Rental"
+        - "Evaluation"
+        - "NFR"
+        - "AWS private offer"
+        - "Community (free)"
+        - "Other / not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-version
+    attributes:
+      label: Selected API version
+      description: |
+        Settings → Devices & Services → Veeam Backup for M365 → Configure. If you left it on
+        *Automatic*, pick the version shown in diagnostics.
+      options:
+        - "Automatic (detected)"
+        - "v8"
+        - "v7"
+        - "v6"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      description: "HACS, or the `version` field in `manifest.json`."
+    validations:
+      required: true
+
+  - type: input
+    id: sdk-version
+    attributes:
+      label: veeam-365 library version
+      description: "From `pip show veeam-365`, if you know it."
+    validations:
+      required: false
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.9.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-type
+    attributes:
+      label: Home Assistant installation type
+      options:
+        - "Home Assistant OS"
+        - "Home Assistant Supervised"
+        - "Home Assistant Container"
+        - "Home Assistant Core (venv)"
+        - "Other"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Settings → System → Logs, or `home-assistant.log`. Enable debug logging first for far
+        more detail:
+
+        ```yaml
+        logger:
+          logs:
+            custom_components.veeam_365: debug
+        ```
+
+        Please paste the text rather than a screenshot, and redact hostnames if you need to.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: "Attach or paste the diagnostics download. It contains no credentials."
+      render: json
+    validations:
+      required: false
