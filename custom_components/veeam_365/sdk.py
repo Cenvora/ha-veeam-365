@@ -17,11 +17,11 @@ anything parses a response.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 import importlib
 import logging
 import ssl
 import sys
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
@@ -123,7 +123,9 @@ def _parameter_names(fn: Callable[..., Any]) -> frozenset[str]:
     and on Python 3.14, where annotations are lazy, the generated modules that refer to
     ``Unset`` without importing it raise NameError when they are finally evaluated.
     """
-    code = fn.__code__
+    code = getattr(fn, "__code__", None)
+    if code is None:
+        return frozenset()
     return frozenset(code.co_varnames[: code.co_argcount + code.co_kwonlyargcount])
 
 
