@@ -82,7 +82,7 @@ class VeeamEntity(CoordinatorEntity[VeeamCoordinator]):
         coordinator: VeeamCoordinator,
         entry: ConfigEntry,
         unique_suffix: str,
-        translation_key: str | None,
+        translation_key: str,
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -138,7 +138,7 @@ class VeeamItemEntity(VeeamEntity):
         key: str,
         item: dict[str, Any],
         suffix: str,
-        translation_key: str | None,
+        translation_key: str,
     ) -> None:
         prefix = ITEM_KINDS[key][0]
         self.endpoint = key
@@ -181,7 +181,7 @@ class ItemStateMixin:
 
     @property
     def available(self) -> bool:
-        return getattr(super(), "available", True) and fetch_succeeded(
+        return super().available and fetch_succeeded(  # type: ignore[misc]
             self.coordinator.data, self.state_key
         )
 
@@ -205,7 +205,7 @@ class ProxyPoolMixin:
 
     @property
     def available(self) -> bool:
-        return getattr(super(), "available", True) and fetch_succeeded(
+        return super().available and fetch_succeeded(  # type: ignore[misc]
             self.coordinator.data, "proxies"
         )
 

@@ -12,9 +12,9 @@ one upgrade moves them rather than leaving two of everything.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from homeassistant.components.binary_sensor import (

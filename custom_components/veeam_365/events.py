@@ -21,14 +21,13 @@ down, the feed was failing) are therefore never needed: the listing resyncs.
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections import OrderedDict
+import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-
 from veeam_365.exceptions import VeeamError, VeeamSessionError
 
 from .const import (

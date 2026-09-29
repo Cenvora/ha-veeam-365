@@ -291,9 +291,8 @@ REPOSITORY_SENSORS: tuple[VeeamSensorDescription, ...] = (
         icon="mdi:calendar-lock",
         value_fn=lambda repo: repo.get("immutability_days"),
         # Only meaningful when immutability is on and has a period
-        exists_fn=lambda repo: (
-            bool(repo.get("is_immutable")) and repo.get("immutability_days") is not None
-        ),
+        exists_fn=lambda repo: bool(repo.get("is_immutable"))
+        and repo.get("immutability_days") is not None,
     ),
 )
 

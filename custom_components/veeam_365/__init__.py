@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
-import httpx
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import issue_registry as ir
-
+from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+import httpx
 from veeam_365.exceptions import VeeamAuthenticationError, VeeamError
 
 from .api_version import async_resolve_api_version
