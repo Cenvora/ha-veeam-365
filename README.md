@@ -12,7 +12,7 @@ Veeam Backup for Microsoft 365 Integration for Home Assistant
 
 A Home Assistant custom integration that monitors Veeam Backup for Microsoft 365 servers. This integration provides real-time monitoring of backup jobs and their status directly in Home Assistant. 
 
-This project is an independent, open source Python client for the Veeam Backup for Microsoft 365 <a href="https://helpcenter.veeam.com/references/vbo365/8/rest/tag/SectionAbout">REST API</a>. It is not affiliated with, endorsed by, or sponsored by Veeam Software.
+This project is an independent, open source project. It is not affiliated with, endorsed by, or sponsored by Veeam Software.
 
 ## Features
 
@@ -31,25 +31,27 @@ This project is an independent, open source Python client for the Veeam Backup f
 - Veeam Backup for Microsoft 365 server with REST API enabled (Community Edition not supported)
 
 ## Installation
-
-> **Note**: The required `veeam-365` Python library is automatically installed by Home Assistant when you add this integration. No manual package installation is needed.
-
 ### HACS (Recommended)
 
-1. Open HACS in your Home Assistant instance
-2. Click on "Integrations"
-3. Click the three dots in the top right corner
-4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/Cenvora/ha-veeam-365`
-6. Select category: "Integration"
-7. Click "Add"
-8. Click "Install" on the Veeam Backup for Microsoft 365 card
-9. Restart Home Assistant
+Have [HACS](https://hacs.xyz/) installed, this will allow you to update easily.
 
-### Manual Installation
+* Adding ha-veeam-365 to HACS can be using this button:
 
-1. Copy the `custom_components/veeam_365` directory to your Home Assistant's `custom_components` directory
-2. Restart Home Assistant
+[![image](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Cenvora&repository=ha-veeam-365&category=integration)
+
+> [!NOTE]
+> If the button above doesn't work, add `https://github.com/Cenvora/ha-veeam-365` as a custom repository of type Integration in HACS.
+
+* Click install on the `Veeam Backup for M365` integration.
+* Restart Home Assistant.
+
+<details><summary>Manual Install</summary>
+
+* Copy the `custom_components/veeam_365` folder from the [latest release](https://github.com/Cenvora/ha-veeam-365/releases/latest) to the [`custom_components` folder](https://developers.home-assistant.io/docs/creating_integration_file_structure/#where-home-assistant-looks-for-integrations) in your config directory.
+* Restart Home Assistant.
+</details>
+
+The required `veeam-365` Python library is installed automatically by Home Assistant.
 
 ## Configuration
 
@@ -64,7 +66,7 @@ This project is an independent, open source Python client for the Veeam Backup f
    - **Username**: Veeam server username
    - **Password**: Veeam server password
    - **Verify SSL**: Whether to verify SSL certificates (recommended: enabled)
-   - **API Version**: Leave on `auto` unless you have a reason not to (see below)
+   - **API Version**: Leave on *Automatic* unless you have a reason not to (see below)
 5. Click **Submit**
 
 ### API version
@@ -72,17 +74,17 @@ This project is an independent, open source Python client for the Veeam Backup f
 The REST API carries its version in every path — `/v8/Jobs` — and nothing negotiates one for
 you, so a version has to be chosen up front.
 
-Leaving the option on **auto** lets the integration find it. Every version this integration
+Leaving the option on **Automatic** lets the integration find it. Every version this integration
 supports is probed at once, and the newest one the server answers on is used. Detection needs
 no credentials, costs about one round trip, and falls back to the newest packaged version if
 nothing answers — a server behind a proxy that rewrites statuses is not a setup failure.
 
-`auto` is stored as-is rather than resolved once, so it is re-evaluated on every restart or
+*Automatic* is stored as-is rather than resolved once, so it is re-evaluated on every restart or
 reload: upgrading VB365, or updating the `veeam-365` library, moves the entry onto the newer
 version by itself.
 
 > [!NOTE]
-> That is a trade. A newer API version can rename enum values and add fields, and `auto`
+> That is a trade. A newer API version can rename enum values and add fields, and *Automatic*
 > adopts it on the next restart. Pin a version in the integration's options if you would
 > rather adopt those deliberately.
 
@@ -397,9 +399,34 @@ past what is licensed. Fires when usage crosses a percentage of the licensed tot
 
 <sub>Source: [`license_usage_high.yaml`](blueprints/automation/veeam_365/license_usage_high.yaml)</sub>
 
+## Licensing
+
+**Community Edition, and servers whose license cannot be read, are not supported.**
+Entitlements differ, and some REST API endpoints answer differently or not at all, so entities
+can be missing or unreliable in ways that look like integration bugs.
+
+The integration reads the license it is already polling for and, if it finds an unsupported
+one, raises a warning under **Settings → Repairs**. Nothing is blocked, and the warning clears
+itself once the server reports a supported license.
+
+A second repair appears when the license is within 30 days of expiring (a warning), and again
+once it has expired (an error). Both are checked on every poll and clear on their own once the
+server reports a renewed license.
+
+## Removal
+
+To remove the integration from Home Assistant:
+
+1. Go to **Settings** → **Devices & Services**
+2. Find the **Veeam Backup for M365** integration
+3. Click the three dots menu (⋮) and select **Delete**
+4. Confirm the deletion
+
+All devices and entities associated with this integration will be removed.
+
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/Cenvora/ha-veeam-br/issues)
+- **Issues**: [GitHub Issues](https://github.com/Cenvora/ha-veeam-365/issues)
 - **Documentation**: This README and inline code documentation
 
 ## Contributing
@@ -411,21 +438,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 To set up the development environment:
 
 ```bash
-# Install development dependencies
-pip install black isort flake8 mypy pre-commit
-
-# Install pre-commit hooks (optional but recommended)
-pre-commit install
+# Install development and test dependencies
+pip install ruff ty -r requirements_test.txt
 ```
 
 ### Code Quality
 
 This project uses automated testing and formatting:
 
-- **Black**: Code formatting (line length: 100)
-- **isort**: Import sorting
-- **flake8**: Linting
-- **mypy**: Type checking
+- **Ruff**: Code formatting and linting (line length: 100)
+- **ty**: Type checking
+- **pytest**: Tests, using `pytest-homeassistant-custom-component`
 - **HACS Action**: HACS integration validation
 - **Hassfest**: Home Assistant manifest validation
 
@@ -433,14 +456,16 @@ Run formatting and checks locally:
 
 ```bash
 # Format code
-black custom_components/
-isort custom_components/
+ruff format custom_components/
 
 # Run linting
-flake8 custom_components/
+ruff check custom_components/
 
 # Type checking
-mypy custom_components/ --ignore-missing-imports
+ty check custom_components/
+
+# Run tests
+pytest
 
 # Validate JSON
 python -m json.tool custom_components/veeam_365/manifest.json
@@ -449,12 +474,12 @@ python -m json.tool custom_components/veeam_365/manifest.json
 ### CI/CD
 
 All pull requests are automatically validated with:
-- Python code formatting (Black, isort)
-- Linting (flake8)
-- Type checking (mypy)
+- Python code formatting and linting (Ruff)
+- Type checking (ty)
+- Tests (pytest)
 - HACS validation
 - Home Assistant manifest validation (hassfest)
-- JSON schema validation
+- JSON validation
 
 ## License
 
