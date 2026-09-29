@@ -51,7 +51,13 @@ from .const import (
     UPDATE_TIMEOUT,
 )
 from .display import humanize
-from .licensing import describe_license, unsupported_license_reason
+from .licensing import (
+    LICENSE_EXPIRED,
+    LICENSE_EXPIRING,
+    describe_license,
+    license_expiration,
+    unsupported_license_reason,
+)
 from .sdk import VeeamSdk
 
 _LOGGER = logging.getLogger(__name__)
@@ -821,6 +827,42 @@ def check_license_support(hass: HomeAssistant, entry: ConfigEntry, data: dict | 
     )
 
 
+def expiration_issue_id(entry: ConfigEntry, state: str) -> str:
+    """Repair issue ID for one config entry's expiring or expired license."""
+    return f"{state}_{entry.entry_id}"
+
+
+def check_license_expiration(hass: HomeAssistant, entry: ConfigEntry, data: dict | None) -> None:
+    """Raise a repair issue while the license is expired or expires soon.
+
+    Expiring and expired are separate issues, so dismissing the early warning does not also
+    hide the expiry itself. Both clear once the server reports a license good for longer.
+    """
+    now = dt_util.utcnow()
+    result = license_expiration((data or {}).get("license_info"), now)
+    current = result[0] if result else None
+    for state in (LICENSE_EXPIRING, LICENSE_EXPIRED):
+        if state != current:
+            ir.async_delete_issue(hass, DOMAIN, expiration_issue_id(entry, state))
+    if result is None:
+        return
+
+    state, expiration = result
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        expiration_issue_id(entry, state),
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR if state == LICENSE_EXPIRED else ir.IssueSeverity.WARNING,
+        translation_key=state,
+        translation_placeholders={
+            "host": str(entry.data.get(CONF_HOST, "unknown")),
+            "date": expiration.date().isoformat(),
+            "days": str((expiration - now).days),
+        },
+    )
+
+
 class _VeeamCalls:
     """Calling operations and paging through collections, shared by both coordinators."""
 
@@ -984,9 +1026,14 @@ class VeeamCoordinator(_VeeamCalls, DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def _update_license_issue(self, data: dict[str, Any]) -> None:
-        """Re-evaluate the unsupported-license repair when the answer changes."""
+        """Re-evaluate the license repairs.
+
+        Expiration on every poll, since an unchanged license still moves closer to its date;
+        support only when the answer changes, so its log line is not repeated each poll.
+        """
         if not fetch_succeeded(data, "license_info"):
             return
+        check_license_expiration(self.hass, self.config_entry, data)
         reason = unsupported_license_reason(data.get("license_info"))
         if reason == self._license_reason:
             return

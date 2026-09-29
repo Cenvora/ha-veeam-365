@@ -371,6 +371,14 @@
     "unsupported_license": {
       "title": "Nepodporovaná licence Veeam na {host}",
       "description": "Server Veeam Backup for Microsoft 365 na adrese **{host}** hlásí licenci **{license}**.\n\nCommunity Edition a servery, jejichž licenci nelze přečíst, tato integrace nepodporuje: oprávnění se liší a některé koncové body REST API odpovídají jinak nebo vůbec, takže entity mohou chybět nebo být nespolehlivé.\n\nIntegrace dál běží — nic není blokováno. Pokud narazíte na problémy, uveďte prosím tento typ licence v hlášení chyby. Toto upozornění odstraníte instalací podporované licence nebo odebráním integrace."
+    },
+    "license_expiring": {
+      "title": "Licence Veeam na {host} brzy vyprší",
+      "description": "Licence Veeam Backup for Microsoft 365 na **{host}** vyprší {date}, tedy za {days} dní. Po vypršení přestanou úlohy zálohování zpracovávat nová data, jakmile uplyne případná doba odkladu, kterou váš typ licence umožňuje.\n\nNainstalujte obnovenou licenci v konzoli Veeam Backup for Microsoft 365. Toto upozornění zmizí samo, jakmile server nahlásí novou licenci."
+    },
+    "license_expired": {
+      "title": "Licence Veeam na {host} vypršela",
+      "description": "Licence Veeam Backup for Microsoft 365 na **{host}** vypršela {date}. Úlohy zálohování přestaly zpracovávat nová data, nebo přestanou, jakmile uplyne případná doba odkladu, kterou váš typ licence umožňuje.\n\nNainstalujte obnovenou licenci v konzoli Veeam Backup for Microsoft 365. Toto upozornění zmizí samo, jakmile server nahlásí novou licenci."
     }
   }
 }

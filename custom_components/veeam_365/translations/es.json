@@ -371,6 +371,14 @@
     "unsupported_license": {
       "title": "Licencia de Veeam no compatible en {host}",
       "description": "El servidor Veeam Backup for Microsoft 365 en **{host}** informa la licencia **{license}**.\n\nEsta integración no es compatible con Community Edition ni con servidores cuya licencia no se puede leer: los derechos de uso difieren y algunos endpoints de la REST API responden de forma distinta o no responden, por lo que puede haber entidades ausentes o poco fiables.\n\nLa integración sigue funcionando: no se bloquea nada. Si encuentra problemas, incluya este tipo de licencia en su informe de errores. Instale una licencia compatible o elimine la integración para quitar esta advertencia."
+    },
+    "license_expiring": {
+      "title": "La licencia de Veeam en {host} caduca pronto",
+      "description": "La licencia de Veeam Backup for Microsoft 365 en **{host}** caduca el {date}, dentro de {days} días. Cuando caduque, los trabajos de copia de seguridad dejarán de procesar datos nuevos, una vez terminado el período de gracia que permita tu tipo de licencia.\n\nInstala una licencia renovada en la consola de Veeam Backup for Microsoft 365. Este aviso desaparece por sí solo en cuanto se notifique la nueva licencia."
+    },
+    "license_expired": {
+      "title": "La licencia de Veeam en {host} ha caducado",
+      "description": "La licencia de Veeam Backup for Microsoft 365 en **{host}** caducó el {date}. Los trabajos de copia de seguridad han dejado de procesar datos nuevos, o lo harán cuando termine el período de gracia que permita tu tipo de licencia.\n\nInstala una licencia renovada en la consola de Veeam Backup for Microsoft 365. Este aviso desaparece por sí solo en cuanto se notifique la nueva licencia."
     }
   }
 }

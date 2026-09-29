@@ -35,6 +35,7 @@ from .conftest import (
     health_json,
     job_json,
     job_session_json,
+    license_json,
     local_repo_json,
     maintenance_json,
     object_repo_json,
@@ -388,6 +389,51 @@ async def test_license_repair_follows_each_poll(hass: HomeAssistant, server: Fak
     server.license = {"status": "Valid", "type": "Subscription"}
     await refresh(hass, entry)
     assert issues.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_license_expiration_repair_follows_each_poll(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.license = license_json(
+        licenseExpires=(dt_util.utcnow() + timedelta(days=10)).isoformat()
+    )
+    entry = await setup_entry(hass)
+    issues = ir.async_get(hass)
+    expiring = issues.async_get_issue(DOMAIN, f"license_expiring_{entry.entry_id}")
+    assert expiring is not None
+    assert expiring.severity == ir.IssueSeverity.WARNING
+    assert expiring.translation_placeholders["days"] in {"9", "10"}
+
+    # Expired is its own issue, so dismissing the early warning does not hide it
+    server.license = license_json(licenseExpires="2020-01-01T00:00:00+00:00")
+    await refresh(hass, entry)
+    assert issues.async_get_issue(DOMAIN, f"license_expiring_{entry.entry_id}") is None
+    expired = issues.async_get_issue(DOMAIN, f"license_expired_{entry.entry_id}")
+    assert expired.severity == ir.IssueSeverity.ERROR
+    assert expired.translation_placeholders["date"] == "2020-01-01"
+
+    # A poll that cannot read the license leaves the issue alone
+    server.overrides["license_.license_get"] = server.error("Insufficient permissions")
+    await refresh(hass, entry)
+    assert issues.async_get_issue(DOMAIN, f"license_expired_{entry.entry_id}") is not None
+
+    # Renewed: cleared on the next poll
+    del server.overrides["license_.license_get"]
+    server.license = license_json(licenseExpires="2099-01-01T00:00:00+00:00")
+    await refresh(hass, entry)
+    assert issues.async_get_issue(DOMAIN, f"license_expired_{entry.entry_id}") is None
+
+
+async def test_license_expiration_repair_is_cleared_on_removal(
+    hass: HomeAssistant, server: FakeServer
+) -> None:
+    server.license = license_json(licenseExpires="2020-01-01T00:00:00+00:00")
+    entry = await setup_entry(hass)
+    issue_id = f"license_expired_{entry.entry_id}"
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 
 
 # ---------------------------------------------------------------------------
