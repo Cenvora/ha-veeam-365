@@ -371,6 +371,14 @@
     "unsupported_license": {
       "title": "Nieobsługiwana licencja Veeam na {host}",
       "description": "Serwer Veeam Backup for Microsoft 365 pod adresem **{host}** zgłasza licencję **{license}**.\n\nCommunity Edition oraz serwery, których licencji nie można odczytać, nie są obsługiwane przez tę integrację: uprawnienia się różnią, a niektóre punkty końcowe REST API odpowiadają inaczej lub wcale, więc może brakować encji lub mogą one być zawodne.\n\nIntegracja nadal działa — nic nie jest blokowane. Jeśli napotkasz problemy, podaj ten typ licencji w zgłoszeniu błędu. Zainstaluj obsługiwaną licencję lub usuń integrację, aby usunąć to ostrzeżenie."
+    },
+    "license_expiring": {
+      "title": "Licencja Veeam na {host} wkrótce wygaśnie",
+      "description": "Licencja Veeam Backup for Microsoft 365 na **{host}** wygasa {date}, za {days} dni. Po wygaśnięciu zadania kopii zapasowych przestaną przetwarzać nowe dane, gdy skończy się ewentualny okres karencji przewidziany dla Twojego typu licencji.\n\nZainstaluj odnowioną licencję w konsoli Veeam Backup for Microsoft 365. To ostrzeżenie zniknie samo, gdy serwer zgłosi nową licencję."
+    },
+    "license_expired": {
+      "title": "Licencja Veeam na {host} wygasła",
+      "description": "Licencja Veeam Backup for Microsoft 365 na **{host}** wygasła {date}. Zadania kopii zapasowych przestały przetwarzać nowe dane lub przestaną, gdy skończy się ewentualny okres karencji przewidziany dla Twojego typu licencji.\n\nZainstaluj odnowioną licencję w konsoli Veeam Backup for Microsoft 365. To ostrzeżenie zniknie samo, gdy serwer zgłosi nową licencję."
     }
   }
 }

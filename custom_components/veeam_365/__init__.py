@@ -31,11 +31,13 @@ from .coordinator import (
     VeeamProtectedCountsCoordinator,
     current_ids,
     describe_error,
+    expiration_issue_id,
     is_prunable,
     license_issue_id,
     supports_protected_counts,
 )
 from .events import VeeamEventListener, supports_event_feed
+from .licensing import LICENSE_EXPIRED, LICENSE_EXPIRING
 from .sdk import create_client, load_sdk
 
 _LOGGER = logging.getLogger(__name__)
@@ -314,3 +316,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     otherwise disappear and come back on each restart.
     """
     ir.async_delete_issue(hass, DOMAIN, license_issue_id(entry))
+    for state in (LICENSE_EXPIRING, LICENSE_EXPIRED):
+        ir.async_delete_issue(hass, DOMAIN, expiration_issue_id(entry, state))
