@@ -123,7 +123,9 @@ def _parameter_names(fn: Callable[..., Any]) -> frozenset[str]:
     and on Python 3.14, where annotations are lazy, the generated modules that refer to
     ``Unset`` without importing it raise NameError when they are finally evaluated.
     """
-    code = fn.__code__
+    code = getattr(fn, "__code__", None)
+    if code is None:
+        return frozenset()
     return frozenset(code.co_varnames[: code.co_argcount + code.co_kwonlyargcount])
 
 
