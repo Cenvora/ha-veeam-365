@@ -17,6 +17,7 @@ from typing import Any
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.httpx_client import get_async_client
+
 from veeam_365.discovery import detect_api_version
 
 from .const import (

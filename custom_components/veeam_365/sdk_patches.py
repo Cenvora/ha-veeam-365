@@ -48,9 +48,9 @@ It is re-raised carrying both.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from enum import Enum
-import logging
 from types import ModuleType
 from typing import Any
 
