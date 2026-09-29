@@ -21,12 +21,13 @@ Error handling, in one place:
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 from enum import Enum
-import logging
 from typing import Any
 
+import httpx
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_USERNAME
 from homeassistant.core import HomeAssistant
@@ -34,7 +35,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
-import httpx
+
 from veeam_365.exceptions import VeeamAuthenticationError, VeeamError, VeeamSessionError
 
 from .const import (

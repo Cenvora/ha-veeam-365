@@ -8,18 +8,19 @@ worked.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-import logging
 from typing import Any
 
+import httpx
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import httpx
+
 from veeam_365.exceptions import VeeamAuthenticationError, VeeamError
 
 from .const import ACTION_TIMEOUT, DOMAIN

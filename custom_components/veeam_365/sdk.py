@@ -17,11 +17,11 @@ anything parses a response.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 import importlib
 import logging
 import ssl
 import sys
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
