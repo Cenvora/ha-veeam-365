@@ -380,5 +380,12 @@
       "title": "La licenza Veeam su {host} è scaduta",
       "description": "La licenza di Veeam Backup for Microsoft 365 su **{host}** è scaduta il {date}. I job di backup hanno smesso di elaborare nuovi dati, o smetteranno al termine dell'eventuale periodo di tolleranza previsto dal tuo tipo di licenza.\n\nInstalla una licenza rinnovata nella console di Veeam Backup for Microsoft 365. Questo avviso scompare da solo non appena viene segnalata la nuova licenza."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automatica"
+      }
+    }
   }
 }

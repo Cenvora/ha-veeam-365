@@ -380,5 +380,12 @@
       "title": "Veeam-licentie op {host} is verlopen",
       "description": "De Veeam Backup for Microsoft 365-licentie op **{host}** is verlopen op {date}. Back-uptaken verwerken geen nieuwe gegevens meer, of stoppen daarmee zodra een eventuele respijtperiode van je licentietype voorbij is.\n\nInstalleer een vernieuwde licentie in de Veeam Backup for Microsoft 365-console. Deze waarschuwing verdwijnt vanzelf zodra de nieuwe licentie wordt gemeld."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automatisch"
+      }
+    }
   }
 }

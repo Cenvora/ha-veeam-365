@@ -380,5 +380,12 @@
       "title": "A licença Veeam em {host} expirou",
       "description": "A licença do Veeam Backup for Microsoft 365 em **{host}** expirou em {date}. Os trabalhos de backup deixaram de processar novos dados, ou deixarão assim que terminar o eventual período de carência que o seu tipo de licença permite.\n\nInstale uma licença renovada na consola do Veeam Backup for Microsoft 365. Este aviso desaparece sozinho assim que a nova licença for comunicada."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automático"
+      }
+    }
   }
 }

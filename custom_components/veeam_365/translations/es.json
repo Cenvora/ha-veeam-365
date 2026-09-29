@@ -380,5 +380,12 @@
       "title": "La licencia de Veeam en {host} ha caducado",
       "description": "La licencia de Veeam Backup for Microsoft 365 en **{host}** caducó el {date}. Los trabajos de copia de seguridad han dejado de procesar datos nuevos, o lo harán cuando termine el período de gracia que permita tu tipo de licencia.\n\nInstala una licencia renovada en la consola de Veeam Backup for Microsoft 365. Este aviso desaparece por sí solo en cuanto se notifique la nueva licencia."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automático"
+      }
+    }
   }
 }

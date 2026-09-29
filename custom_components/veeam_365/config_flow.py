@@ -361,6 +361,7 @@ class Veeam365ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(
                         options=api_version_options,
                         mode=selector.SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_API_VERSION,
                     )
                 ),
             }
@@ -417,6 +418,7 @@ class Veeam365OptionsFlow(config_entries.OptionsFlowWithReload):
                     selector.SelectSelectorConfig(
                         options=api_version_options,
                         mode=selector.SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_API_VERSION,
                     )
                 ),
             }

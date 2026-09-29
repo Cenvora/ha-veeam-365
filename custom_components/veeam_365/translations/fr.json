@@ -380,5 +380,12 @@
       "title": "La licence Veeam sur {host} a expiré",
       "description": "La licence Veeam Backup for Microsoft 365 sur **{host}** a expiré le {date}. Les tâches de sauvegarde ont cessé de traiter de nouvelles données, ou cesseront à la fin de l'éventuelle période de grâce prévue par votre type de licence.\n\nInstallez une licence renouvelée dans la console Veeam Backup for Microsoft 365. Cet avertissement disparaît de lui-même dès que la nouvelle licence est signalée."
     }
+  },
+  "selector": {
+    "api_version": {
+      "options": {
+        "auto": "Automatique"
+      }
+    }
   }
 }
