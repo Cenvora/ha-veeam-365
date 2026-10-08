@@ -1,4 +1,4 @@
 # Test dependencies. pytest-homeassistant-custom-component pins the matching Home Assistant.
-pytest-homeassistant-custom-component==0.13.367
+pytest-homeassistant-custom-component==0.13.371
 veeam-365>=0.4.1,<1.0.0
 pyyaml
